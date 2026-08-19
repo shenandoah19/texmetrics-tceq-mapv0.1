@@ -230,9 +230,10 @@ async function loadOrders() {
 async function main() {
   const embed = document.documentElement.dataset.embed === "true";
   const payload = await loadOrders();
+  const urlQuery = new URLSearchParams(location.search).get("q")?.trim() || "";
 
   const filters = {
-    query: "",
+    query: urlQuery,
     program: "",
     county: "",
     reClass: "",
@@ -243,8 +244,11 @@ async function main() {
     minPayable: 0,
     customer: "",
     topLimit: 10,
-    ...applyPreset("5y", payload.meta.dateMin, payload.meta.dateMax),
+    ...(urlQuery
+      ? applyPreset("all", payload.meta.dateMin, payload.meta.dateMax)
+      : applyPreset("5y", payload.meta.dateMin, payload.meta.dateMax)),
   };
+  let focusedSearch = false;
 
   const startYear = Number((payload.meta.dateMin || "2015").slice(0, 4));
   const endYear = Number((payload.meta.dateMax || "2026").slice(0, 4));
@@ -300,6 +304,8 @@ async function main() {
       </aside>
     </div>
   `;
+
+  if (urlQuery) document.getElementById("query").value = urlQuery;
 
   const mobile = window.matchMedia("(max-width: 720px)").matches;
   const map = L.map("map", {
@@ -415,6 +421,12 @@ async function main() {
       marker.bindPopup(popupHtml(site), { maxWidth: 340 });
       marker.on("click", () => showDetail(site));
       marker.addTo(layer);
+    }
+
+    if (!focusedSearch && urlQuery && sites.length) {
+      focusedSearch = true;
+      if (sites.length === 1) map.flyTo([sites[0].lat, sites[0].lon], 10, { duration: 0.6 });
+      else map.fitBounds(sites.map((site) => [site.lat, site.lon]), { padding: [40, 40], maxZoom: 10 });
     }
 
     drawChips();
