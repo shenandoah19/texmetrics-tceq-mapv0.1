@@ -95,7 +95,7 @@ function popupHtml(order) {
 
 async function main() {
   const embed = document.documentElement.dataset.embed === "true";
-  const res = await fetch("./data/tceq-orders.json");
+  const res = await fetch("./tceq-orders.json");
   if (!res.ok) throw new Error("Could not load TCEQ orders data.");
   const payload = await res.json();
 
