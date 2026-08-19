@@ -24,13 +24,48 @@ html, body {
   background: var(--bg);
   color: var(--fg);
   font-family: var(--sans);
+  overflow-x: hidden;
 }
 
 button, select, input { font: inherit; color: inherit; }
 button:not(:disabled) { cursor: pointer; }
 
-.app { max-width: var(--app); margin: 0 auto; padding: 20px 24px 48px; }
-.embed .app { padding: 12px 16px 16px; }
+.app { max-width: var(--app); margin: 0 auto; padding: 20px 24px 48px; overflow-x: hidden; }
+.embed .app { padding: 10px 12px 16px; }
+
+.mast {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+}
+.wordmark {
+  height: 40px;
+  width: auto;
+  background: #fff;
+  border-radius: 6px;
+  padding: 4px 8px;
+  object-fit: contain;
+}
+.shield {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  z-index: 500;
+  height: 48px;
+  width: 48px;
+  object-fit: contain;
+  padding: 4px;
+  border: 1px solid var(--border);
+  background: color-mix(in oklab, var(--bg) 85%, transparent);
+  border-radius: 10px;
+  pointer-events: none;
+}
+.selects.extra { width: min(420px, 100%); }
+.order-popup .site {
+  margin: -4px 0 10px;
+  font-size: 12px;
+  color: var(--muted);
+}
 
 .kicker {
   margin: 0;
@@ -44,7 +79,7 @@ button:not(:disabled) { cursor: pointer; }
 h1 {
   margin: 6px 0 0;
   font-family: var(--display);
-  font-size: clamp(2.4rem, 4vw, 4rem);
+  font-size: clamp(1.85rem, 7vw, 4rem);
   font-weight: 500;
   letter-spacing: -0.03em;
   line-height: 0.95;
@@ -85,10 +120,6 @@ h1 {
   flex-wrap: wrap;
   gap: 8px;
 }
-.search-row .selects {
-  width: min(100%, 420px);
-  flex: 1 1 280px;
-}
 .search {
   position: relative;
   flex: 1 1 240px;
@@ -115,7 +146,10 @@ h1 {
   grid-template-columns: 1fr 1fr;
   gap: 8px;
   width: min(420px, 100%);
+  flex: 1 1 280px;
+  min-width: 0;
 }
+select { max-width: 100%; min-width: 0; }
 select, .chip, .year {
   height: 40px;
   border: 1px solid var(--border);
@@ -170,6 +204,32 @@ select, .chip, .year {
   }
 }
 .embed .map-wrap { height: 58vh; position: relative; }
+
+@media (max-width: 720px) {
+  .embed .app { padding: 8px 10px 20px; }
+  .kicker { font-size: 10px; letter-spacing: 0.1em; }
+  .stats { margin: 10px 0 10px; gap: 8px; }
+  .stat { padding: 8px; }
+  .stat dd { font-size: 15px; }
+  .search-row { display: grid; }
+  .selects { width: 100%; }
+  .selects.extra { width: 100%; }
+  .mast { align-items: center; }
+  .wordmark { height: 32px; }
+  .chips { gap: 6px; }
+  .chip, .year { height: 32px; padding: 0 10px; font-size: 13px; }
+  .map-wrap, .embed .map-wrap {
+    height: min(52dvh, 420px);
+    min-height: 260px;
+    border-radius: 14px;
+  }
+  .legend { left: 10px; bottom: 10px; padding: 6px 8px; }
+  .card { padding: 12px; border-radius: 14px; }
+}
+
+@media (max-width: 420px) {
+  .year { width: 100%; }
+}
 
 #map {
   height: 100%;
