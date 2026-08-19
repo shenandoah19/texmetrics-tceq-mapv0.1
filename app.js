@@ -15,6 +15,20 @@ const AMOUNT_PRESETS = [
   { label: "$250,000+", value: 250000 },
 ];
 
+const COMPLIANCE_RING = {
+  HIGH: "#3d9a6a",
+  SATISFACTORY: "#c4a35a",
+  UNSATISFACTORY: "#d45d4e",
+  UNCLASSIFIED: "#c96a4a",
+};
+const CLASS_LABEL = {
+  HIGH: "High",
+  SATISFACTORY: "Satisfactory",
+  UNSATISFACTORY: "Unsatisfactory",
+  UNCLASSIFIED: "Unclassified",
+};
+const HALO_MIN = 100000;
+
 const money = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
 const compact = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", notation: "compact", maximumFractionDigits: 1 });
 
@@ -47,7 +61,7 @@ function escapeHtml(value) {
 
 function bubbleRadius(payable, maxPayable) {
   const t = Math.sqrt(Math.max(payable, 0) / Math.max(maxPayable, 1));
-  return 5 + t * 21;
+  return 2.6 + t * 9.9;
 }
 
 function filterOrders(orders, filters) {
@@ -55,6 +69,8 @@ function filterOrders(orders, filters) {
   return orders.filter((order) => {
     if (filters.program && order.program !== filters.program) return false;
     if (filters.county && order.county !== filters.county) return false;
+    if (filters.reClass && (order.reClass || "UNCLASSIFIED") !== filters.reClass) return false;
+    if (filters.biz && (order.biz || "Unknown") !== filters.biz) return false;
     if (order.payable < filters.minPayable) return false;
     if (filters.customer && order.customer !== filters.customer) return false;
     if (filters.dateFrom && order.orderDate < filters.dateFrom) return false;
@@ -66,6 +82,10 @@ function filterOrders(orders, filters) {
       order.caseNo.toLowerCase().includes(q) ||
       order.docket.toLowerCase().includes(q) ||
       (order.rn || "").toLowerCase().includes(q) ||
+      (order.siteName || "").toLowerCase().includes(q) ||
+      (order.reName || "").toLowerCase().includes(q) ||
+      (order.address || "").toLowerCase().includes(q) ||
+      (order.city || "").toLowerCase().includes(q) ||
       order.program.toLowerCase().includes(q)
     );
   });
@@ -82,27 +102,71 @@ function topCustomers(orders, limit = 5) {
 }
 
 function popupHtml(order) {
-  const rn = order.rn ? escapeHtml(order.rn) : "Not in source file";
-  return `<div class="order-popup"><h3>${escapeHtml(order.customer)}</h3><dl>
+  const site = (order.siteName || order.reName || "").trim();
+  const place = [order.address, order.city, order.county].filter(Boolean).join(", ");
+  const extra = [];
+  if (order.assessed && order.assessed !== order.payable) {
+    extra.push(`<div><dt>Assessed</dt><dd>${escapeHtml(money.format(order.assessed))}</dd></div>`);
+  }
+  return `<div class="order-popup"><h3>${escapeHtml(order.customer)}</h3>
+    ${site && site !== order.customer ? `<p class="site">${escapeHtml(site)}</p>` : ""}
+    <dl>
     <div><dt>Payable</dt><dd class="amount">${escapeHtml(money.format(order.payable))}</dd></div>
+    ${extra.join("")}
+    ${order.deferred ? `<div><dt>Deferred</dt><dd>${escapeHtml(money.format(order.deferred))}</dd></div>` : ""}
+    ${order.sep ? `<div><dt>SEP offset</dt><dd>${escapeHtml(money.format(order.sep))}</dd></div>` : ""}
+    ${order.sep ? `<div><dt>Total paid</dt><dd>${escapeHtml(money.format(order.payable + order.sep))}</dd></div>` : ""}
+    <div><dt>RN</dt><dd>${order.rn ? escapeHtml(order.rn) : "Not in source file"}</dd></div>
+    <div><dt>Rating</dt><dd>${escapeHtml(CLASS_LABEL[order.reClass] || "Unclassified")}</dd></div>
+    <div><dt>Business</dt><dd>${escapeHtml(order.biz || "Unknown")}</dd></div>
+    <div><dt>Place</dt><dd>${escapeHtml(place)}</dd></div>
     <div><dt>Order date</dt><dd>${escapeHtml(formatDate(order.orderDate))}</dd></div>
     <div><dt>Program</dt><dd>${escapeHtml(order.program)}</dd></div>
     <div><dt>Case No.</dt><dd>${escapeHtml(order.caseNo)}</dd></div>
-    <div><dt>County</dt><dd>${escapeHtml(order.county)}</dd></div>
-    <div><dt>RN</dt><dd>${rn}</dd></div>
+    <div><dt>Location</dt><dd>${order.loc === "site" ? "Facility site" : "County center"}</dd></div>
   </dl></div>`;
+}
+
+async function loadOrders() {
+  const page = location.pathname.endsWith(".html")
+    ? location.pathname.replace(/[^/]+$/, "")
+    : location.pathname.endsWith("/")
+      ? location.pathname
+      : `${location.pathname}/`;
+  const origin = location.origin;
+  const candidates = [
+    `${origin}${page}tceq-orders.json`,
+    `${origin}${page}data/tceq-orders.json`,
+    "./tceq-orders.json",
+    "./data/tceq-orders.json",
+    "https://shenandoah19.github.io/texmetrics-tceq-mapv0.1/tceq-orders.json",
+  ];
+  const seen = new Set();
+  let last = "not found";
+  for (const url of candidates) {
+    if (seen.has(url)) continue;
+    seen.add(url);
+    try {
+      const res = await fetch(url);
+      if (res.ok) return res.json();
+      last = `${url} (${res.status})`;
+    } catch (err) {
+      last = `${url} (${err.message})`;
+    }
+  }
+  throw new Error(`Could not load TCEQ orders data. ${last}`);
 }
 
 async function main() {
   const embed = document.documentElement.dataset.embed === "true";
-  const res = await fetch("https://shenandoah19.github.io/texmetrics-tceq-mapv0.1/tceq-orders.json");
-  if (!res.ok) throw new Error("Could not load TCEQ orders data.");
-  const payload = await res.json();
+  const payload = await loadOrders();
 
   const filters = {
     query: "",
     program: "",
     county: "",
+    reClass: "",
+    biz: "",
     minPayable: 0,
     customer: "",
     ...applyPreset("5y", payload.meta.dateMin, payload.meta.dateMax),
@@ -116,20 +180,29 @@ async function main() {
   const root = document.getElementById("app");
   root.innerHTML = `
     <header>
-      <p class="kicker">Texas Commission on Environmental Quality</p>
-      <h1>Agreed Orders</h1>
-      ${embed ? "" : `<p class="lede">Administrative penalties mapped across Texas. Bubble size is payable amount. Use the year chips to include historic fines.</p>`}
+      <div class="mast">
+        <img class="wordmark" src="./brand/wordmark.jpg" alt="TexMetrics" onerror="this.style.display='none'" />
+        <div>
+          <p class="kicker">Independent map of TCEQ public records</p>
+          <h1>Agreed Orders</h1>
+        </div>
+      </div>
+      ${embed ? "" : `<p class="lede">Administrative penalties mapped to TCEQ facility sites. Dot size is payable amount; glow marks fines of $100,000 or more. Ring color is compliance rating.</p>`}
       <dl class="stats" id="stats"></dl>
       <div class="filters">
         <div class="search-row">
           <label class="search">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3-3"/></svg>
-            <input id="query" placeholder="Search customer, case, county, or docket" />
+            <input id="query" placeholder="Search customer, RN, site, case, or county" />
           </label>
           <div class="selects">
             <select id="program"><option value="">All programs</option>${payload.programs.map((p) => `<option>${escapeHtml(p)}</option>`).join("")}</select>
             <select id="county"><option value="">All counties</option>${payload.counties.map((c) => `<option>${escapeHtml(c)}</option>`).join("")}</select>
           </div>
+        </div>
+        <div class="selects extra">
+          <select id="reClass"><option value="">All ratings</option>${(payload.classes || ["HIGH","SATISFACTORY","UNSATISFACTORY","UNCLASSIFIED"]).map((c) => `<option value="${c}">${CLASS_LABEL[c] || c}</option>`).join("")}</select>
+          <select id="biz"><option value="">All business types</option>${(payload.businessTypes || []).map((b) => `<option>${escapeHtml(b)}</option>`).join("")}</select>
         </div>
         <div class="chips" id="dates"></div>
         <div class="chips" id="amounts"></div>
@@ -137,21 +210,24 @@ async function main() {
     </header>
     <div class="layout">
       <section class="map-wrap"><div id="map"></div>
-        <div class="legend"><p class="kicker">Bubble size</p><p>Larger circle = larger payable fine</p></div>
+        <div class="legend"><p class="kicker">Firefly size</p><p>Larger glow = $100k+ payable</p><p>Ring = compliance rating</p></div>
+        <img class="shield" src="./brand/shield.jpg" alt="" onerror="this.style.display='none'" />
       </section>
       <aside>
         <section class="card"><p class="kicker">Ranked by payable</p><h2>Top 5 customers</h2><ol class="rank" id="rank"></ol></section>
         <section class="card detail dash" id="detail"></section>
-        <p class="note">Source: ${escapeHtml(payload.meta.source)}. ${payload.meta.skippedCoords} records had missing coordinates and were not mapped. <a href="${payload.meta.sourceUrl}" target="_blank" rel="noreferrer">Open source dataset</a></p>
+        <p class="note">Snapshot of publicly posted TCEQ agreed-order records processed by TexMetrics. Bubble size is payable (cash due to TCEQ), not the assessed penalty. ${payload.meta.siteLocated ? `${payload.meta.siteLocated.toLocaleString()} bubbles use facility coordinates.` : ""} ${payload.meta.skippedCoords} records had missing coordinates and were not mapped.</p>
+        <p class="note">TexMetrics is an independent company. This site is not affiliated with, endorsed by, or sponsored by the Texas Commission on Environmental Quality. Data is for information only and is not legal advice. Confirm official orders on the TCEQ Commission Issued Orders page.</p>
       </aside>
     </div>
   `;
 
+  const mobile = window.matchMedia("(max-width: 720px)").matches;
   const map = L.map("map", {
     center: [31.15, -99.35],
-    zoom: 6,
+    zoom: mobile ? 5 : 6,
     minZoom: 5,
-    maxZoom: 11,
+    maxZoom: 12,
     maxBounds: [[25.7, -106.7], [36.6, -93.4]],
     maxBoundsViscosity: 0.7,
     preferCanvas: true,
@@ -162,7 +238,11 @@ async function main() {
     maxZoom: 18,
   }).addTo(map);
   const layer = L.layerGroup().addTo(map);
-  requestAnimationFrame(() => map.invalidateSize());
+  const resizeMap = () => map.invalidateSize();
+  window.addEventListener("resize", resizeMap);
+  window.addEventListener("orientationchange", resizeMap);
+  requestAnimationFrame(resizeMap);
+  setTimeout(resizeMap, 300);
 
   function activeDateId() {
     for (const preset of DATE_PRESETS) {
@@ -197,9 +277,9 @@ async function main() {
     const counties = new Set(visible.map((o) => o.county)).size;
     document.getElementById("stats").innerHTML = `
       <div class="stat"><dt>Orders on map</dt><dd>${visible.length.toLocaleString()}</dd><p>${payload.meta.mapped.toLocaleString()} in file</p></div>
-      <div class="stat"><dt>Payable total</dt><dd>${compact.format(payable)}</dd><p>Filtered set</p></div>
+      <div class="stat"><dt>Payable total</dt><dd>${compact.format(payable)}</dd><p>Cash due to TCEQ</p></div>
       <div class="stat"><dt>Date span</dt><dd>${(filters.dateFrom || "").slice(0, 4)}–${(filters.dateTo || "").slice(0, 4)}</dd><p>Selected range</p></div>
-      <div class="stat"><dt>Counties</dt><dd>${counties.toLocaleString()}</dd><p>${payload.meta.skippedCoords} unmapped</p></div>
+      <div class="stat"><dt>Counties</dt><dd>${counties.toLocaleString()}</dd><p>${(payload.meta.siteLocated || 0).toLocaleString()} site pins</p></div>
     `;
 
     const ranked = topCustomers(visible);
@@ -216,13 +296,27 @@ async function main() {
     layer.clearLayers();
     const renderer = L.canvas({ padding: 0.4 });
     for (const order of visible) {
+      if (order.payable < HALO_MIN) continue;
+      L.circleMarker([order.lat, order.lon], {
+        renderer,
+        radius: bubbleRadius(order.payable, maxPayable) * 2.4,
+        color: "#c96a4a",
+        weight: 0,
+        fillColor: "#c96a4a",
+        fillOpacity: 0.12,
+        opacity: 0,
+        interactive: false,
+      }).addTo(layer);
+    }
+    for (const order of visible) {
+      const ring = COMPLIANCE_RING[order.reClass || "UNCLASSIFIED"] || "#c96a4a";
       const marker = L.circleMarker([order.lat, order.lon], {
         renderer,
         radius: bubbleRadius(order.payable, maxPayable),
-        color: "#c96a4a",
-        weight: 1,
+        color: ring,
+        weight: order.reClass && order.reClass !== "UNCLASSIFIED" ? 1.4 : 0.7,
         fillColor: "#c96a4a",
-        fillOpacity: 0.38 + Math.min(order.payable / Math.max(maxPayable, 1), 1) * 0.28,
+        fillOpacity: 0.32 + Math.min(order.payable / Math.max(maxPayable, 1), 1) * 0.28,
         opacity: 0.95,
       });
       marker.bindTooltip(`<strong>${escapeHtml(order.customer)}</strong><br/>${money.format(order.payable)}`, {
@@ -250,7 +344,13 @@ async function main() {
         <div class="row"><dt>Case No.</dt><dd>${escapeHtml(order.caseNo)}</dd></div>
         <div class="row"><dt>County</dt><dd>${escapeHtml(order.county)}</dd></div>
         <div class="row"><dt>RN</dt><dd>${order.rn ? escapeHtml(order.rn) : "Not in source file"}</dd></div>
+        <div class="row"><dt>Rating</dt><dd>${escapeHtml(CLASS_LABEL[order.reClass] || "Unclassified")}</dd></div>
+        <div class="row"><dt>Business</dt><dd>${escapeHtml(order.biz || "Unknown")}</dd></div>
+        <div class="row"><dt>County</dt><dd>${escapeHtml(order.county)}</dd></div>
+        ${order.address || order.city ? `<div class="row"><dt>Address</dt><dd>${escapeHtml([order.address, order.city].filter(Boolean).join(", "))}</dd></div>` : ""}
         <div class="row"><dt>Docket</dt><dd>${escapeHtml(order.docket)}</dd></div>
+        ${order.assessed && order.assessed !== order.payable ? `<div class="row"><dt>Assessed</dt><dd>${escapeHtml(money.format(order.assessed))}</dd></div>` : ""}
+        <div class="row"><dt>Location</dt><dd>${order.loc === "site" ? "Facility site" : "County center"}</dd></div>
       </dl>
     `;
   }
@@ -259,6 +359,8 @@ async function main() {
 
   document.getElementById("query").addEventListener("input", (e) => { filters.query = e.target.value; render(); });
   document.getElementById("program").addEventListener("change", (e) => { filters.program = e.target.value; render(); });
+  document.getElementById("reClass").addEventListener("change", (e) => { filters.reClass = e.target.value; render(); });
+  document.getElementById("biz").addEventListener("change", (e) => { filters.biz = e.target.value; render(); });
   document.getElementById("county").addEventListener("change", (e) => {
     filters.county = e.target.value;
     if (filters.county) {
