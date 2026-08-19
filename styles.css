@@ -264,6 +264,10 @@ select, .chip, .year {
   font-size: 20px;
   font-weight: 500;
 }
+.rank-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 8px; }
+.chips.tight { gap: 4px; }
+.chips.tight .chip { height: 28px; padding: 0 10px; font-size: 12px; }
+
 .rank { display: grid; gap: 12px; margin: 16px 0 0; padding: 0; list-style: none; }
 .rank button { width: 100%; text-align: left; background: none; border: 0; padding: 0; }
 .rank-top { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 6px; }
