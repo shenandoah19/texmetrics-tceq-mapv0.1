@@ -242,6 +242,7 @@ async function main() {
     hasMajor: false,
     minPayable: 0,
     customer: "",
+    topLimit: 10,
     ...applyPreset("5y", payload.meta.dateMin, payload.meta.dateMax),
   };
 
@@ -288,7 +289,11 @@ async function main() {
         <img class="shield" src="./brand/shield.jpg" alt="" onerror="this.style.display='none'" />
       </section>
       <aside>
-        <section class="card"><p class="kicker">Ranked by payable</p><h2>Top 5 customers</h2><ol class="rank" id="rank"></ol></section>
+        <section class="card"><p class="kicker">Ranked by payable</p>
+          <div class="rank-head"><h2 id="rankTitle">Top 10 customers</h2>
+            <div class="chips tight" id="topLimit"></div>
+          </div>
+          <ol class="rank" id="rank"></ol></section>
         <section class="card detail dash" id="detail"></section>
         <p class="note">Snapshot of publicly posted TCEQ agreed-order records processed by TexMetrics. One pin per RN; size is total payable (cash due to TCEQ). ${payload.meta.siteLocated ? `${payload.meta.siteLocated.toLocaleString()} orders have facility coordinates.` : ""} ${payload.meta.skippedCoords} records had missing coordinates and were not mapped.</p>
         <p class="note">TexMetrics is an independent company. This site is not affiliated with, endorsed by, or sponsored by the Texas Commission on Environmental Quality. Data is for information only and is not legal advice. Confirm official orders on the TCEQ Commission Issued Orders page.</p>
@@ -362,7 +367,11 @@ async function main() {
       <div class="stat"><dt>Counties</dt><dd>${counties.toLocaleString()}</dd><p>${(payload.meta.siteLocated || 0).toLocaleString()} site pins</p></div>
     `;
 
-    const ranked = topCustomers(visible);
+    const ranked = topCustomers(visible, filters.topLimit);
+    document.getElementById("rankTitle").textContent = `Top ${filters.topLimit} customers`;
+    document.getElementById("topLimit").innerHTML = [5, 10, 25].map((n) =>
+      `<button class="chip${filters.topLimit === n ? " on" : ""}" data-top="${n}">${n}</button>`
+    ).join("");
     const max = ranked[0]?.total || 1;
     document.getElementById("rank").innerHTML = ranked.map((row, i) => `
       <li><button data-customer="${escapeHtml(row.customer)}">
@@ -479,6 +488,9 @@ async function main() {
     });
     document.getElementById("toYear").addEventListener("change", (e) => {
       filters.dateTo = `${e.target.value}-12-31`; render();
+    });
+    document.querySelectorAll("[data-top]").forEach((btn) => {
+      btn.addEventListener("click", () => { filters.topLimit = Number(btn.dataset.top); render(); });
     });
     document.querySelectorAll("#rank [data-customer]").forEach((btn) => {
       btn.addEventListener("click", () => {
