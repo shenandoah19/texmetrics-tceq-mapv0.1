@@ -71,6 +71,9 @@ function filterOrders(orders, filters) {
     if (filters.county && order.county !== filters.county) return false;
     if (filters.reClass && (order.reClass || "UNCLASSIFIED") !== filters.reClass) return false;
     if (filters.biz && (order.biz || "Unknown") !== filters.biz) return false;
+    if (filters.hasActive && !(order.violActive)) return false;
+    if (filters.hasRepeat && !(order.violRepeat)) return false;
+    if (filters.hasMajor && !(order.violMajor)) return false;
     if (order.payable < filters.minPayable) return false;
     if (filters.customer && order.customer !== filters.customer) return false;
     if (filters.dateFrom && order.orderDate < filters.dateFrom) return false;
@@ -101,30 +104,97 @@ function topCustomers(orders, limit = 5) {
   return [...map.values()].sort((a, b) => b.total - a.total).slice(0, limit);
 }
 
-function popupHtml(order) {
-  const site = (order.siteName || order.reName || "").trim();
-  const place = [order.address, order.city, order.county].filter(Boolean).join(", ");
-  const extra = [];
-  if (order.assessed && order.assessed !== order.payable) {
-    extra.push(`<div><dt>Assessed</dt><dd>${escapeHtml(money.format(order.assessed))}</dd></div>`);
+function groupSites(orders) {
+  const buckets = new Map();
+  for (const order of orders) {
+    const rn = (order.rn || "").trim().toUpperCase();
+    const key = rn || `NORN:${order.caseNo}:${order.docket}`;
+    const list = buckets.get(key);
+    if (list) list.push(order);
+    else buckets.set(key, [order]);
   }
-  return `<div class="order-popup"><h3>${escapeHtml(order.customer)}</h3>
-    ${site && site !== order.customer ? `<p class="site">${escapeHtml(site)}</p>` : ""}
+  const sites = [];
+  for (const [key, list] of buckets) {
+    list.sort((a, b) => b.orderDate.localeCompare(a.orderDate));
+    const siteRows = list.filter((order) => order.loc === "site");
+    const src = siteRows.length ? siteRows : list;
+    const lon = src.reduce((sum, order) => sum + order.lon, 0) / src.length;
+    const lat = src.reduce((sum, order) => sum + order.lat, 0) / src.length;
+    const payByCust = new Map();
+    for (const order of list) payByCust.set(order.customer, (payByCust.get(order.customer) || 0) + order.payable);
+    const customers = [...payByCust.entries()].sort((a, b) => b[1] - a[1]).map(([name]) => name);
+    const first = list[0];
+    sites.push({
+      rn: key.startsWith("NORN:") ? "" : key,
+      lon, lat,
+      loc: siteRows.length ? "site" : "county",
+      customer: customers[0] || first.customer,
+      customers,
+      siteName: (list.find((order) => order.siteName) || {}).siteName || (list.find((order) => order.reName) || {}).reName || "",
+      address: (list.find((order) => order.address) || {}).address || "",
+      city: (list.find((order) => order.city) || {}).city || "",
+      county: first.county,
+      reClass: first.reClass || "UNCLASSIFIED",
+      biz: (list.find((order) => order.biz && order.biz !== "Unknown") || first).biz || "Unknown",
+      payable: list.reduce((sum, order) => sum + order.payable, 0),
+      count: list.length,
+      violTotal: first.violTotal || 0,
+      violActive: first.violActive || 0,
+      violRepeat: first.violRepeat || 0,
+      violMajor: first.violMajor || 0,
+      orders: list,
+    });
+  }
+  const cells = new Map();
+  for (const site of sites) {
+    const cell = `${site.lon.toFixed(4)},${site.lat.toFixed(4)}`;
+    const group = cells.get(cell);
+    if (group) group.push(site);
+    else cells.set(cell, [site]);
+  }
+  const golden = Math.PI * (3 - Math.sqrt(5));
+  for (const group of cells.values()) {
+    if (group.length < 2) continue;
+    group.forEach((site, index) => {
+      const radius = 0.004 + 0.003 * Math.sqrt(index);
+      site.lon += radius * Math.cos(index * golden);
+      site.lat += radius * Math.sin(index * golden);
+    });
+  }
+  return sites;
+}
+
+function violLine(site) {
+  const total = site.violTotal || 0;
+  if (!total) return "None in extract";
+  const bits = [`${total.toLocaleString()} total`];
+  if (site.violActive) bits.push(`${site.violActive} active`);
+  if (site.violRepeat) bits.push(`${site.violRepeat} repeat`);
+  if (site.violMajor) bits.push(`${site.violMajor} major`);
+  return bits.join(" · ");
+}
+
+function popupHtml(site) {
+  const title = site.siteName && site.siteName !== site.customer ? site.siteName : site.customer;
+  const place = [site.address, site.city, site.county].filter(Boolean).join(", ");
+  const items = site.orders.slice(0, 8).map((order) =>
+    `<li>${escapeHtml(formatDate(order.orderDate))} · ${escapeHtml(money.format(order.payable))} · ${escapeHtml(order.program)}</li>`
+  ).join("");
+  const more = site.count > 8 ? `<li>+${site.count - 8} more agreed orders</li>` : "";
+  return `<div class="order-popup"><h3>${escapeHtml(title)}</h3>
+    ${title !== site.customer ? `<p class="site">${escapeHtml(site.customer)}</p>` : ""}
     <dl>
-    <div><dt>Payable</dt><dd class="amount">${escapeHtml(money.format(order.payable))}</dd></div>
-    ${extra.join("")}
-    ${order.deferred ? `<div><dt>Deferred</dt><dd>${escapeHtml(money.format(order.deferred))}</dd></div>` : ""}
-    ${order.sep ? `<div><dt>SEP offset</dt><dd>${escapeHtml(money.format(order.sep))}</dd></div>` : ""}
-    ${order.sep ? `<div><dt>Total paid</dt><dd>${escapeHtml(money.format(order.payable + order.sep))}</dd></div>` : ""}
-    <div><dt>RN</dt><dd>${order.rn ? escapeHtml(order.rn) : "Not in source file"}</dd></div>
-    <div><dt>Rating</dt><dd>${escapeHtml(CLASS_LABEL[order.reClass] || "Unclassified")}</dd></div>
-    <div><dt>Business</dt><dd>${escapeHtml(order.biz || "Unknown")}</dd></div>
+    <div><dt>Payable</dt><dd class="amount">${escapeHtml(money.format(site.payable))}</dd></div>
+    <div><dt>Orders</dt><dd>${site.count} at this RN</dd></div>
+    <div><dt>RN</dt><dd>${site.rn ? escapeHtml(site.rn) : "Not in source file"}</dd></div>
+    <div><dt>Rating</dt><dd>${escapeHtml(CLASS_LABEL[site.reClass] || "Unclassified")}</dd></div>
+    <div><dt>Business</dt><dd>${escapeHtml(site.biz || "Unknown")}</dd></div>
     <div><dt>Place</dt><dd>${escapeHtml(place)}</dd></div>
-    <div><dt>Order date</dt><dd>${escapeHtml(formatDate(order.orderDate))}</dd></div>
-    <div><dt>Program</dt><dd>${escapeHtml(order.program)}</dd></div>
-    <div><dt>Case No.</dt><dd>${escapeHtml(order.caseNo)}</dd></div>
-    <div><dt>Location</dt><dd>${order.loc === "site" ? "Facility site" : "County center"}</dd></div>
-  </dl></div>`;
+    <div><dt>Location</dt><dd>${site.loc === "site" ? "Facility site" : "County center"}</dd></div>
+    <div><dt>Violations</dt><dd>${escapeHtml(violLine(site))}</dd></div>
+    </dl>
+    <ol class="order-list">${items}${more}</ol>
+  </div>`;
 }
 
 async function loadOrders() {
@@ -167,6 +237,9 @@ async function main() {
     county: "",
     reClass: "",
     biz: "",
+    hasActive: false,
+    hasRepeat: false,
+    hasMajor: false,
     minPayable: 0,
     customer: "",
     ...applyPreset("5y", payload.meta.dateMin, payload.meta.dateMax),
@@ -187,7 +260,7 @@ async function main() {
           <h1>Agreed Orders</h1>
         </div>
       </div>
-      ${embed ? "" : `<p class="lede">Administrative penalties mapped to TCEQ facility sites. Dot size is payable amount; glow marks fines of $100,000 or more. Ring color is compliance rating.</p>`}
+      ${embed ? "" : `<p class="lede">One pin per facility RN. Size is total payable at that site. Glow marks $100,000 or more. Ring color is compliance rating.</p>`}
       <dl class="stats" id="stats"></dl>
       <div class="filters">
         <div class="search-row">
@@ -206,17 +279,18 @@ async function main() {
         </div>
         <div class="chips" id="dates"></div>
         <div class="chips" id="amounts"></div>
+        <div class="chips" id="viols"></div>
       </div>
     </header>
     <div class="layout">
       <section class="map-wrap"><div id="map"></div>
-        <div class="legend"><p class="kicker">Firefly size</p><p>Larger glow = $100k+ payable</p><p>Ring = compliance rating</p></div>
+        <div class="legend"><p class="kicker">One pin per RN</p><p>Size = total payable at site</p><p>Glow = $100k+ · ring = rating</p></div>
         <img class="shield" src="./brand/shield.jpg" alt="" onerror="this.style.display='none'" />
       </section>
       <aside>
         <section class="card"><p class="kicker">Ranked by payable</p><h2>Top 5 customers</h2><ol class="rank" id="rank"></ol></section>
         <section class="card detail dash" id="detail"></section>
-        <p class="note">Snapshot of publicly posted TCEQ agreed-order records processed by TexMetrics. Bubble size is payable (cash due to TCEQ), not the assessed penalty. ${payload.meta.siteLocated ? `${payload.meta.siteLocated.toLocaleString()} bubbles use facility coordinates.` : ""} ${payload.meta.skippedCoords} records had missing coordinates and were not mapped.</p>
+        <p class="note">Snapshot of publicly posted TCEQ agreed-order records processed by TexMetrics. One pin per RN; size is total payable (cash due to TCEQ). ${payload.meta.siteLocated ? `${payload.meta.siteLocated.toLocaleString()} orders have facility coordinates.` : ""} ${payload.meta.skippedCoords} records had missing coordinates and were not mapped.</p>
         <p class="note">TexMetrics is an independent company. This site is not affiliated with, endorsed by, or sponsored by the Texas Commission on Environmental Quality. Data is for information only and is not legal advice. Confirm official orders on the TCEQ Commission Issued Orders page.</p>
       </aside>
     </div>
@@ -269,14 +343,20 @@ async function main() {
     ).join("") + (filters.customer
       ? `<button class="chip on" data-clear="customer">${escapeHtml(filters.customer)} · Clear</button>`
       : "");
+
+    document.getElementById("viols").innerHTML = `
+      <button class="chip${filters.hasActive ? " on" : ""}" data-viol="hasActive">Active violations</button>
+      <button class="chip${filters.hasRepeat ? " on" : ""}" data-viol="hasRepeat">Repeats</button>
+      <button class="chip${filters.hasMajor ? " on" : ""}" data-viol="hasMajor">Major</button>`;
   }
 
   function render() {
     const visible = filterOrders(payload.orders, filters);
+    const sites = groupSites(visible);
     const payable = visible.reduce((s, o) => s + o.payable, 0);
     const counties = new Set(visible.map((o) => o.county)).size;
     document.getElementById("stats").innerHTML = `
-      <div class="stat"><dt>Orders on map</dt><dd>${visible.length.toLocaleString()}</dd><p>${payload.meta.mapped.toLocaleString()} in file</p></div>
+      <div class="stat"><dt>Sites on map</dt><dd>${sites.length.toLocaleString()}</dd><p>${visible.length.toLocaleString()} orders · ${payload.meta.mapped.toLocaleString()} in file</p></div>
       <div class="stat"><dt>Payable total</dt><dd>${compact.format(payable)}</dd><p>Cash due to TCEQ</p></div>
       <div class="stat"><dt>Date span</dt><dd>${(filters.dateFrom || "").slice(0, 4)}–${(filters.dateTo || "").slice(0, 4)}</dd><p>Selected range</p></div>
       <div class="stat"><dt>Counties</dt><dd>${counties.toLocaleString()}</dd><p>${(payload.meta.siteLocated || 0).toLocaleString()} site pins</p></div>
@@ -292,14 +372,14 @@ async function main() {
       </button></li>
     `).join("") || `<p class="meta">No orders match the current filters.</p>`;
 
-    const maxPayable = visible.reduce((m, o) => Math.max(m, o.payable), 0);
+    const maxPayable = sites.reduce((m, o) => Math.max(m, o.payable), 0);
     layer.clearLayers();
     const renderer = L.canvas({ padding: 0.4 });
-    for (const order of visible) {
-      if (order.payable < HALO_MIN) continue;
-      L.circleMarker([order.lat, order.lon], {
+    for (const site of sites) {
+      if (site.payable < HALO_MIN) continue;
+      L.circleMarker([site.lat, site.lon], {
         renderer,
-        radius: bubbleRadius(order.payable, maxPayable) * 2.4,
+        radius: bubbleRadius(site.payable, maxPayable) * 2.4,
         color: "#c96a4a",
         weight: 0,
         fillColor: "#c96a4a",
@@ -308,22 +388,23 @@ async function main() {
         interactive: false,
       }).addTo(layer);
     }
-    for (const order of visible) {
-      const ring = COMPLIANCE_RING[order.reClass || "UNCLASSIFIED"] || "#c96a4a";
-      const marker = L.circleMarker([order.lat, order.lon], {
+    for (const site of sites) {
+      const ring = COMPLIANCE_RING[site.reClass || "UNCLASSIFIED"] || "#c96a4a";
+      const marker = L.circleMarker([site.lat, site.lon], {
         renderer,
-        radius: bubbleRadius(order.payable, maxPayable),
+        radius: bubbleRadius(site.payable, maxPayable),
         color: ring,
-        weight: order.reClass && order.reClass !== "UNCLASSIFIED" ? 1.4 : 0.7,
+        weight: site.reClass && site.reClass !== "UNCLASSIFIED" ? 1.4 : 0.7,
         fillColor: "#c96a4a",
-        fillOpacity: 0.32 + Math.min(order.payable / Math.max(maxPayable, 1), 1) * 0.28,
+        fillOpacity: 0.32 + Math.min(site.payable / Math.max(maxPayable, 1), 1) * 0.28,
         opacity: 0.95,
       });
-      marker.bindTooltip(`<strong>${escapeHtml(order.customer)}</strong><br/>${money.format(order.payable)}`, {
+      const label = site.siteName && site.siteName !== site.customer ? site.siteName : site.customer;
+      marker.bindTooltip(`<strong>${escapeHtml(label)}</strong><br/>${money.format(site.payable)} · ${site.count} order${site.count === 1 ? "" : "s"}`, {
         className: "order-tip", sticky: true, opacity: 1, direction: "top",
       });
-      marker.bindPopup(popupHtml(order), { maxWidth: 300 });
-      marker.on("click", () => showDetail(order));
+      marker.bindPopup(popupHtml(site), { maxWidth: 340 });
+      marker.on("click", () => showDetail(site));
       marker.addTo(layer);
     }
 
@@ -331,31 +412,32 @@ async function main() {
     bindChips();
   }
 
-  function showDetail(order) {
+  function showDetail(site) {
     const el = document.getElementById("detail");
     el.classList.remove("dash");
+    const title = site.siteName && site.siteName !== site.customer ? site.siteName : site.customer;
+    const orders = site.orders.slice(0, 12).map((order) =>
+      `<div class="row"><dt>${escapeHtml(formatDate(order.orderDate))}</dt><dd>${escapeHtml(money.format(order.payable))} · ${escapeHtml(order.program)}</dd></div>`
+    ).join("");
     el.innerHTML = `
-      <p class="kicker">Selected order</p>
-      <h2>${escapeHtml(order.customer)}</h2>
-      <p class="amount">${money.format(order.payable)}</p>
+      <p class="kicker">Selected site</p>
+      <h2>${escapeHtml(title)}</h2>
+      <p class="amount">${money.format(site.payable)}</p>
+      <p class="meta">Total payable · ${site.count} agreed order${site.count === 1 ? "" : "s"}</p>
       <dl>
-        <div class="row"><dt>Order date</dt><dd>${escapeHtml(formatDate(order.orderDate))}</dd></div>
-        <div class="row"><dt>Program</dt><dd>${escapeHtml(order.program)}</dd></div>
-        <div class="row"><dt>Case No.</dt><dd>${escapeHtml(order.caseNo)}</dd></div>
-        <div class="row"><dt>County</dt><dd>${escapeHtml(order.county)}</dd></div>
-        <div class="row"><dt>RN</dt><dd>${order.rn ? escapeHtml(order.rn) : "Not in source file"}</dd></div>
-        <div class="row"><dt>Rating</dt><dd>${escapeHtml(CLASS_LABEL[order.reClass] || "Unclassified")}</dd></div>
-        <div class="row"><dt>Business</dt><dd>${escapeHtml(order.biz || "Unknown")}</dd></div>
-        <div class="row"><dt>County</dt><dd>${escapeHtml(order.county)}</dd></div>
-        ${order.address || order.city ? `<div class="row"><dt>Address</dt><dd>${escapeHtml([order.address, order.city].filter(Boolean).join(", "))}</dd></div>` : ""}
-        <div class="row"><dt>Docket</dt><dd>${escapeHtml(order.docket)}</dd></div>
-        ${order.assessed && order.assessed !== order.payable ? `<div class="row"><dt>Assessed</dt><dd>${escapeHtml(money.format(order.assessed))}</dd></div>` : ""}
-        <div class="row"><dt>Location</dt><dd>${order.loc === "site" ? "Facility site" : "County center"}</dd></div>
+        <div class="row"><dt>RN</dt><dd>${site.rn ? escapeHtml(site.rn) : "Not in source file"}</dd></div>
+        <div class="row"><dt>Rating</dt><dd>${escapeHtml(CLASS_LABEL[site.reClass] || "Unclassified")}</dd></div>
+        <div class="row"><dt>Business</dt><dd>${escapeHtml(site.biz || "Unknown")}</dd></div>
+        <div class="row"><dt>County</dt><dd>${escapeHtml(site.county)}</dd></div>
+        ${site.address || site.city ? `<div class="row"><dt>Address</dt><dd>${escapeHtml([site.address, site.city].filter(Boolean).join(", "))}</dd></div>` : ""}
+        <div class="row"><dt>Location</dt><dd>${site.loc === "site" ? "Facility site" : "County center"}</dd></div>
+        <div class="row"><dt>Violations</dt><dd>${escapeHtml(violLine(site))}</dd></div>
+        ${orders}
       </dl>
     `;
   }
 
-  document.getElementById("detail").innerHTML = `<p class="kicker">Selected order</p><p class="meta" style="margin-top:8px">Click a bubble on the map to inspect a fine.</p>`;
+  document.getElementById("detail").innerHTML = `<p class="kicker">Selected site</p><p class="meta" style="margin-top:8px">Click a pin to see every agreed order and violation count at that RN.</p>`;
 
   document.getElementById("query").addEventListener("input", (e) => { filters.query = e.target.value; render(); });
   document.getElementById("program").addEventListener("change", (e) => { filters.program = e.target.value; render(); });
@@ -365,7 +447,7 @@ async function main() {
     filters.county = e.target.value;
     if (filters.county) {
       const sample = payload.orders.find((o) => o.county === filters.county);
-      if (sample) map.flyTo([sample.clat, sample.clon], 9, { duration: 0.55 });
+      if (sample) map.flyTo([sample.lat, sample.lon], 9, { duration: 0.55 });
     } else {
       map.flyTo([31.15, -99.35], 6, { duration: 0.45 });
     }
@@ -381,6 +463,13 @@ async function main() {
     });
     document.querySelectorAll("[data-amt]").forEach((btn) => {
       btn.addEventListener("click", () => { filters.minPayable = Number(btn.dataset.amt); render(); });
+    });
+    document.querySelectorAll("[data-viol]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const key = btn.dataset.viol;
+        filters[key] = !filters[key];
+        render();
+      });
     });
     document.querySelectorAll("[data-clear]").forEach((btn) => {
       btn.addEventListener("click", () => { filters.customer = ""; render(); });
