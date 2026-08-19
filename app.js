@@ -268,6 +268,8 @@ async function main() {
       ${embed ? "" : `<p class="lede">One pin per facility RN. Size is total payable at that site. Glow marks $100,000 or more. Ring color is compliance rating.</p>`}
       <dl class="stats" id="stats"></dl>
       <div class="filters">
+        <details class="filter-fold" id="filterFold">
+          <summary>Filters & search</summary>
         <div class="search-row">
           <label class="search">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3-3"/></svg>
@@ -285,6 +287,7 @@ async function main() {
         <div class="chips" id="dates"></div>
         <div class="chips" id="amounts"></div>
         <div class="chips" id="viols"></div>
+        </details>
       </div>
     </header>
     <div class="layout">
@@ -316,7 +319,10 @@ async function main() {
     maxBounds: [[25.7, -106.7], [36.6, -93.4]],
     maxBoundsViscosity: 0.7,
     preferCanvas: true,
+    zoomControl: false,
   });
+  L.control.zoom({ position: "topright" }).addTo(map);
+  if (!mobile) document.getElementById("filterFold").open = true;
   L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
     attribution: "&copy; OpenStreetMap &copy; CARTO",
     subdomains: "abcd",
@@ -418,8 +424,11 @@ async function main() {
       marker.bindTooltip(`<strong>${escapeHtml(label)}</strong><br/>${money.format(site.payable)} · ${site.count} order${site.count === 1 ? "" : "s"}`, {
         className: "order-tip", sticky: true, opacity: 1, direction: "top",
       });
-      marker.bindPopup(popupHtml(site), { maxWidth: 340 });
-      marker.on("click", () => showDetail(site));
+      if (!mobile) marker.bindPopup(popupHtml(site), { maxWidth: 340, autoPanPadding: [24, 24] });
+      marker.on("click", () => {
+        showDetail(site);
+        if (mobile) document.getElementById("detail").scrollIntoView({ behavior: "smooth", block: "start" });
+      });
       marker.addTo(layer);
     }
 
