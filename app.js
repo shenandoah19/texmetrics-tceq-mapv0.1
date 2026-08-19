@@ -214,9 +214,10 @@ async function main() {
 
     const maxPayable = visible.reduce((m, o) => Math.max(m, o.payable), 0);
     layer.clearLayers();
+    const renderer = L.canvas({ padding: 0.4 });
     for (const order of visible) {
       const marker = L.circleMarker([order.lat, order.lon], {
-        renderer: L.canvas({ padding: 0.4 }),
+        renderer,
         radius: bubbleRadius(order.payable, maxPayable),
         color: "#c96a4a",
         weight: 1,
