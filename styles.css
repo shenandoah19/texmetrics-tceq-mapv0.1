@@ -85,6 +85,10 @@ h1 {
   flex-wrap: wrap;
   gap: 8px;
 }
+.search-row .selects {
+  width: min(100%, 420px);
+  flex: 1 1 280px;
+}
 .search {
   position: relative;
   flex: 1 1 240px;
