@@ -447,7 +447,12 @@ async function main() {
   }
 
   function selectedRn() {
-    const fromSite = selectedSite?.rn && String(selectedSite.rn).trim();
+    const detail = document.getElementById("detail");
+    const fromPanel = (detail?.dataset?.siteRn || "").trim();
+    if (fromPanel) return fromPanel.toUpperCase();
+    const fromBtn = (document.getElementById("reportCta")?.dataset?.rn || "").trim();
+    if (fromBtn) return fromBtn.toUpperCase();
+    const fromSite = (selectedSite?.rn || "").trim();
     if (fromSite) return fromSite.toUpperCase();
     const rows = document.querySelectorAll("#detail .row");
     for (const row of rows) {
@@ -457,18 +462,6 @@ async function main() {
       if (val && val !== "Not in source file") return val.toUpperCase();
     }
     return "";
-  }
-
-  function filenameFromDisposition(header, rn) {
-    const fallback = `TexMetrics_${rn}_Compliance_Report.pdf`;
-    if (!header) return fallback;
-    const star = /filename\*=UTF-8''([^;]+)/i.exec(header);
-    if (star) return decodeURIComponent(star[1].trim());
-    const quoted = /filename="([^"]+)"/i.exec(header);
-    if (quoted) return quoted[1];
-    const plain = /filename=([^;]+)/i.exec(header);
-    if (plain) return plain[1].trim().replace(/^["']|["']$/g, "");
-    return fallback;
   }
 
   function setReportError(msg) {
@@ -536,9 +529,14 @@ async function main() {
     setReportBusy(true);
     reportAbort = new AbortController();
     try {
-      const res = await fetch(PDF_API_URL, {
+      const res = await fetch(`${PDF_API_URL}?rn=${encodeURIComponent(rn)}`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Accept: "application/pdf" },
+        cache: "no-store",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/pdf",
+          "Cache-Control": "no-store",
+        },
         body: JSON.stringify({ rn, password }),
         signal: reportAbort.signal,
       });
@@ -564,7 +562,7 @@ async function main() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = filenameFromDisposition(res.headers.get("content-disposition"), rn);
+      a.download = `TexMetrics_${rn}_Compliance_Report.pdf`;
       a.rel = "noopener";
       document.body.appendChild(a);
       a.click();
@@ -618,6 +616,7 @@ async function main() {
     selectedSite = site;
     const el = document.getElementById("detail");
     el.classList.remove("dash");
+    const rn = (site.rn || "").trim().toUpperCase();
     const title = site.siteName && site.siteName !== site.customer ? site.siteName : site.customer;
     const orders = site.orders.slice(0, 12).map((order) =>
       `<div class="row"><dt>${escapeHtml(formatDate(order.orderDate))}</dt><dd>${escapeHtml(money.format(order.payable))} · ${escapeHtml(order.program)}</dd></div>`
@@ -628,11 +627,11 @@ async function main() {
       <p class="amount">${money.format(site.payable)}</p>
       <p class="meta">Total payable · ${site.count} agreed order${site.count === 1 ? "" : "s"}</p>
       <div class="report-cta">
-        <button type="button" class="report-cta-button" id="reportCta">Request compliance report for this RN</button>
+        <button type="button" class="report-cta-button" id="reportCta" data-rn="${escapeHtml(rn)}">Request compliance report for this RN</button>
         <p>PDF: ratings, peers, enforcement history, linked agreed orders — public TCEQ data.</p>
       </div>
       <dl>
-        <div class="row"><dt>RN</dt><dd>${site.rn ? escapeHtml(site.rn) : "Not in source file"}</dd></div>
+        <div class="row"><dt>RN</dt><dd>${rn ? escapeHtml(rn) : "Not in source file"}</dd></div>
         <div class="row"><dt>Rating</dt><dd>${escapeHtml(CLASS_LABEL[site.reClass] || "Unclassified")}</dd></div>
         <div class="row"><dt>Business</dt><dd>${escapeHtml(site.biz || "Unknown")}</dd></div>
         <div class="row"><dt>County</dt><dd>${escapeHtml(site.county)}</dd></div>
@@ -642,6 +641,7 @@ async function main() {
         ${orders}
       </dl>
     `;
+    el.dataset.siteRn = rn;
     document.getElementById("reportCta").addEventListener("click", showEarlyAccess);
   }
 
