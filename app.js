@@ -442,14 +442,49 @@ async function main() {
     bindChips();
   }
 
+  function hideEarlyAccess() {
+    const overlay = document.getElementById("earlyAccess");
+    if (!overlay || !overlay.classList.contains("open")) return;
+    overlay.classList.remove("open");
+    document.body.style.overflow = "";
+    document.removeEventListener("keydown", onEarlyAccessKey);
+    document.getElementById("reportCta")?.focus();
+  }
+
+  function onEarlyAccessKey(e) {
+    if (e.key === "Escape") {
+      e.preventDefault();
+      hideEarlyAccess();
+    }
+  }
+
+  function showEarlyAccess() {
+    let overlay = document.getElementById("earlyAccess");
+    if (!overlay) {
+      overlay = document.createElement("div");
+      overlay.id = "earlyAccess";
+      overlay.className = "modal-overlay";
+      overlay.innerHTML = `
+        <div class="modal" role="dialog" aria-modal="true" aria-labelledby="earlyAccessTitle">
+          <h2 id="earlyAccessTitle">Early access</h2>
+          <p>Full site compliance reports are not open for purchase yet. We're finishing review and fulfillment. Check back soon, or email <a href="mailto:report@texmetrics.com">report@texmetrics.com</a> if you'd like to be notified.</p>
+          <button type="button" class="modal-close">Close</button>
+        </div>`;
+      overlay.addEventListener("click", (e) => { if (e.target === overlay) hideEarlyAccess(); });
+      overlay.querySelector(".modal-close").addEventListener("click", hideEarlyAccess);
+      document.body.appendChild(overlay);
+    }
+    if (overlay.classList.contains("open")) return;
+    overlay.classList.add("open");
+    document.body.style.overflow = "hidden";
+    document.addEventListener("keydown", onEarlyAccessKey);
+    overlay.querySelector(".modal-close").focus();
+  }
+
   function showDetail(site) {
     const el = document.getElementById("detail");
     el.classList.remove("dash");
     const title = site.siteName && site.siteName !== site.customer ? site.siteName : site.customer;
-    const rn = site.rn || "not available";
-    const reportSubject = encodeURIComponent(`Compliance report request ${rn}`);
-    const reportBody = encodeURIComponent(`Please send a sample or quote for RN ${rn} (${title || "site name not available"}).`);
-    const reportHref = `mailto:report@texmetrics.com?subject=${reportSubject}&body=${reportBody}`;
     const orders = site.orders.slice(0, 12).map((order) =>
       `<div class="row"><dt>${escapeHtml(formatDate(order.orderDate))}</dt><dd>${escapeHtml(money.format(order.payable))} · ${escapeHtml(order.program)}</dd></div>`
     ).join("");
@@ -459,7 +494,7 @@ async function main() {
       <p class="amount">${money.format(site.payable)}</p>
       <p class="meta">Total payable · ${site.count} agreed order${site.count === 1 ? "" : "s"}</p>
       <div class="report-cta">
-        <a class="report-cta-button" href="${reportHref}">Request compliance report for this RN</a>
+        <button type="button" class="report-cta-button" id="reportCta">Request compliance report for this RN</button>
         <p>PDF: ratings, peers, enforcement history, linked agreed orders — public TCEQ data.</p>
       </div>
       <dl>
@@ -473,6 +508,7 @@ async function main() {
         ${orders}
       </dl>
     `;
+    document.getElementById("reportCta").addEventListener("click", showEarlyAccess);
   }
 
   document.getElementById("detail").innerHTML = `<p class="kicker">Selected site</p><p class="meta" style="margin-top:8px">Click a pin to see every agreed order and violation count at that RN.</p>`;

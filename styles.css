@@ -300,6 +300,53 @@ select, .chip, .year {
 .report-cta-button:hover { filter: brightness(1.08); }
 .report-cta p { margin: 7px 0 0; color: var(--subtle); font-size: 12px; line-height: 1.4; }
 
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 4000;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+  background: color-mix(in oklab, var(--bg) 72%, transparent);
+}
+.modal-overlay.open { display: flex; }
+.modal {
+  width: min(420px, 100%);
+  max-height: min(90dvh, 100%);
+  overflow: auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px 20px 16px;
+}
+.modal h2 {
+  margin: 0;
+  font-family: var(--display);
+  font-size: 1.35rem;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+}
+.modal p {
+  margin: 10px 0 16px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.5;
+}
+.modal a { color: var(--fg); }
+.modal-close {
+  display: block;
+  width: 100%;
+  padding: 11px 14px;
+  border: 1px solid var(--penalty);
+  border-radius: 8px;
+  background: var(--penalty);
+  color: var(--bg);
+  font-size: 14px;
+  font-weight: 600;
+}
+.modal-close:hover { filter: brightness(1.08); }
+
 .note { font-size: 12px; line-height: 1.55; color: var(--subtle); }
 .note a { color: var(--muted); }
 
