@@ -282,6 +282,23 @@ select, .chip, .year {
 .detail .row { display: grid; grid-template-columns: 96px 1fr; gap: 12px; font-size: 14px; }
 .detail dt { color: var(--subtle); }
 .amount { margin: 8px 0 0; font-family: var(--mono); font-size: 28px; color: var(--penalty); }
+.report-cta { margin-top: 16px; }
+.report-cta-button {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 11px 14px;
+  border: 1px solid var(--penalty);
+  border-radius: 8px;
+  background: var(--penalty);
+  color: var(--bg);
+  text-align: center;
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+}
+.report-cta-button:hover { filter: brightness(1.08); }
+.report-cta p { margin: 7px 0 0; color: var(--subtle); font-size: 12px; line-height: 1.4; }
 
 .note { font-size: 12px; line-height: 1.55; color: var(--subtle); }
 .note a { color: var(--muted); }

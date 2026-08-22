@@ -446,6 +446,10 @@ async function main() {
     const el = document.getElementById("detail");
     el.classList.remove("dash");
     const title = site.siteName && site.siteName !== site.customer ? site.siteName : site.customer;
+    const rn = site.rn || "not available";
+    const reportSubject = encodeURIComponent(`Compliance report request ${rn}`);
+    const reportBody = encodeURIComponent(`Please send a sample or quote for RN ${rn} (${title || "site name not available"}).`);
+    const reportHref = `mailto:report@texmetrics.com?subject=${reportSubject}&body=${reportBody}`;
     const orders = site.orders.slice(0, 12).map((order) =>
       `<div class="row"><dt>${escapeHtml(formatDate(order.orderDate))}</dt><dd>${escapeHtml(money.format(order.payable))} · ${escapeHtml(order.program)}</dd></div>`
     ).join("");
@@ -454,6 +458,10 @@ async function main() {
       <h2>${escapeHtml(title)}</h2>
       <p class="amount">${money.format(site.payable)}</p>
       <p class="meta">Total payable · ${site.count} agreed order${site.count === 1 ? "" : "s"}</p>
+      <div class="report-cta">
+        <a class="report-cta-button" href="${reportHref}">Request compliance report for this RN</a>
+        <p>PDF: ratings, peers, enforcement history, linked agreed orders — public TCEQ data.</p>
+      </div>
       <dl>
         <div class="row"><dt>RN</dt><dd>${site.rn ? escapeHtml(site.rn) : "Not in source file"}</dd></div>
         <div class="row"><dt>Rating</dt><dd>${escapeHtml(CLASS_LABEL[site.reClass] || "Unclassified")}</dd></div>
