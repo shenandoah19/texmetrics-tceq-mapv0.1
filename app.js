@@ -28,6 +28,7 @@ const CLASS_LABEL = {
   UNCLASSIFIED: "Unclassified",
 };
 const HALO_MIN = 100000;
+const PDF_API_URL = "https://texmetrics-pdf-private-production.up.railway.app/api/generate-pdf";
 
 const money = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
 const compact = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", notation: "compact", maximumFractionDigits: 1 });
@@ -249,6 +250,9 @@ async function main() {
       : applyPreset("5y", payload.meta.dateMin, payload.meta.dateMax)),
   };
   let focusedSearch = false;
+  let selectedSite = null;
+  let reportAbort = null;
+  let reportBusy = false;
 
   const startYear = Number((payload.meta.dateMin || "2015").slice(0, 4));
   const endYear = Number((payload.meta.dateMax || "2026").slice(0, 4));
@@ -442,12 +446,68 @@ async function main() {
     bindChips();
   }
 
+  function selectedRn() {
+    const fromSite = selectedSite?.rn && String(selectedSite.rn).trim();
+    if (fromSite) return fromSite.toUpperCase();
+    const rows = document.querySelectorAll("#detail .row");
+    for (const row of rows) {
+      const dt = row.querySelector("dt");
+      if (!dt || dt.textContent.trim() !== "RN") continue;
+      const val = row.querySelector("dd")?.textContent.trim();
+      if (val && val !== "Not in source file") return val.toUpperCase();
+    }
+    return "";
+  }
+
+  function filenameFromDisposition(header, rn) {
+    const fallback = `TexMetrics_${rn}_Compliance_Report.pdf`;
+    if (!header) return fallback;
+    const star = /filename\*=UTF-8''([^;]+)/i.exec(header);
+    if (star) return decodeURIComponent(star[1].trim());
+    const quoted = /filename="([^"]+)"/i.exec(header);
+    if (quoted) return quoted[1];
+    const plain = /filename=([^;]+)/i.exec(header);
+    if (plain) return plain[1].trim().replace(/^["']|["']$/g, "");
+    return fallback;
+  }
+
+  function setReportError(msg) {
+    const el = document.getElementById("earlyAccessError");
+    if (!el) return;
+    if (!msg) {
+      el.hidden = true;
+      el.textContent = "";
+      return;
+    }
+    el.hidden = false;
+    el.textContent = msg;
+  }
+
+  function setReportBusy(busy) {
+    reportBusy = busy;
+    const submit = document.getElementById("earlyAccessSubmit");
+    const input = document.getElementById("earlyAccessPassword");
+    if (submit) {
+      submit.disabled = busy;
+      submit.textContent = busy ? "Generating…" : "Generate Report";
+    }
+    if (input) input.disabled = busy;
+  }
+
   function hideEarlyAccess() {
     const overlay = document.getElementById("earlyAccess");
-    if (!overlay || !overlay.classList.contains("open")) return;
+    if (!overlay || !overlay.classList.contains("open")) {
+      if (reportAbort) reportAbort.abort();
+      return;
+    }
+    if (reportAbort) reportAbort.abort();
     overlay.classList.remove("open");
     document.body.style.overflow = "";
     document.removeEventListener("keydown", onEarlyAccessKey);
+    setReportBusy(false);
+    setReportError("");
+    const input = document.getElementById("earlyAccessPassword");
+    if (input) input.value = "";
     document.getElementById("reportCta")?.focus();
   }
 
@@ -455,6 +515,68 @@ async function main() {
     if (e.key === "Escape") {
       e.preventDefault();
       hideEarlyAccess();
+    }
+  }
+
+  async function generateReport(e) {
+    e.preventDefault();
+    if (reportBusy) return;
+    const rn = selectedRn();
+    if (!rn) {
+      setReportError("No RN on this site.");
+      return;
+    }
+    const password = document.getElementById("earlyAccessPassword")?.value || "";
+    if (!password) {
+      setReportError("Enter the early-access password.");
+      document.getElementById("earlyAccessPassword")?.focus();
+      return;
+    }
+    setReportError("");
+    setReportBusy(true);
+    reportAbort = new AbortController();
+    try {
+      const res = await fetch(PDF_API_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/pdf" },
+        body: JSON.stringify({ rn, password }),
+        signal: reportAbort.signal,
+      });
+      if (res.status === 401) {
+        setReportError("Incorrect password");
+        setReportBusy(false);
+        const input = document.getElementById("earlyAccessPassword");
+        input?.focus();
+        input?.select();
+        return;
+      }
+      if (!res.ok) {
+        setReportError("Could not generate the report. Try again.");
+        setReportBusy(false);
+        return;
+      }
+      const blob = await res.blob();
+      if (!blob || blob.size < 8) {
+        setReportError("Could not generate the report. Try again.");
+        setReportBusy(false);
+        return;
+      }
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filenameFromDisposition(res.headers.get("content-disposition"), rn);
+      a.rel = "noopener";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1500);
+      hideEarlyAccess();
+    } catch (err) {
+      if (err?.name === "AbortError") return;
+      setReportError("Could not generate the report. Try again.");
+      setReportBusy(false);
+    } finally {
+      reportAbort = null;
     }
   }
 
@@ -466,22 +588,34 @@ async function main() {
       overlay.className = "modal-overlay";
       overlay.innerHTML = `
         <div class="modal" role="dialog" aria-modal="true" aria-labelledby="earlyAccessTitle">
-          <h2 id="earlyAccessTitle">Early access</h2>
-          <p>Full site compliance reports are not open for purchase yet. We're finishing review and fulfillment. Check back soon, or email <a href="mailto:report@texmetrics.com">report@texmetrics.com</a> if you'd like to be notified.</p>
-          <button type="button" class="modal-close">Close</button>
+          <h2 id="earlyAccessTitle">Early Access</h2>
+          <p class="modal-lead">Enter the early-access password to generate the compliance report.</p>
+          <form id="earlyAccessForm">
+            <label class="modal-label" for="earlyAccessPassword">Password</label>
+            <input id="earlyAccessPassword" class="modal-input" type="password" name="password" autocomplete="current-password" required />
+            <p class="modal-error" id="earlyAccessError" hidden></p>
+            <div class="modal-actions">
+              <button type="button" class="modal-cancel" id="earlyAccessCancel">Cancel</button>
+              <button type="submit" class="modal-submit" id="earlyAccessSubmit">Generate Report</button>
+            </div>
+          </form>
         </div>`;
       overlay.addEventListener("click", (e) => { if (e.target === overlay) hideEarlyAccess(); });
-      overlay.querySelector(".modal-close").addEventListener("click", hideEarlyAccess);
+      overlay.querySelector("#earlyAccessCancel").addEventListener("click", hideEarlyAccess);
+      overlay.querySelector("#earlyAccessForm").addEventListener("submit", generateReport);
       document.body.appendChild(overlay);
     }
     if (overlay.classList.contains("open")) return;
+    setReportBusy(false);
+    setReportError("");
     overlay.classList.add("open");
     document.body.style.overflow = "hidden";
     document.addEventListener("keydown", onEarlyAccessKey);
-    overlay.querySelector(".modal-close").focus();
+    overlay.querySelector("#earlyAccessPassword")?.focus();
   }
 
   function showDetail(site) {
+    selectedSite = site;
     const el = document.getElementById("detail");
     el.classList.remove("dash");
     const title = site.siteName && site.siteName !== site.customer ? site.siteName : site.customer;
