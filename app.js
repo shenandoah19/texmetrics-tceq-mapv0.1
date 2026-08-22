@@ -478,13 +478,17 @@ async function main() {
 
   function setReportBusy(busy) {
     reportBusy = busy;
+    const overlay = document.getElementById("earlyAccess");
     const submit = document.getElementById("earlyAccessSubmit");
     const input = document.getElementById("earlyAccessPassword");
-    if (submit) {
-      submit.disabled = busy;
-      submit.textContent = busy ? "Generating…" : "Generate Report";
-    }
+    const actions = document.getElementById("earlyAccessActions");
+    const loading = document.getElementById("earlyAccessLoading");
+    overlay?.classList.toggle("is-generating", busy);
+    overlay?.querySelector(".modal")?.setAttribute("aria-busy", busy ? "true" : "false");
     if (input) input.disabled = busy;
+    if (submit) submit.disabled = busy;
+    if (actions) actions.hidden = busy;
+    if (loading) loading.hidden = !busy;
   }
 
   function hideEarlyAccess() {
@@ -592,9 +596,14 @@ async function main() {
             <label class="modal-label" for="earlyAccessPassword">Password</label>
             <input id="earlyAccessPassword" class="modal-input" type="password" name="password" autocomplete="current-password" required />
             <p class="modal-error" id="earlyAccessError" hidden></p>
-            <div class="modal-actions">
+            <div class="modal-actions" id="earlyAccessActions">
               <button type="button" class="modal-cancel" id="earlyAccessCancel">Cancel</button>
               <button type="submit" class="modal-submit" id="earlyAccessSubmit">Generate Report</button>
+            </div>
+            <div class="modal-loading" id="earlyAccessLoading" hidden>
+              <div class="modal-spinner" aria-hidden="true"></div>
+              <div class="modal-progress" aria-hidden="true"><i></i></div>
+              <p class="modal-loading-text">Generating your report… this usually takes about 1 minute.</p>
             </div>
           </form>
         </div>`;
