@@ -228,10 +228,57 @@ async function loadOrders() {
   throw new Error(`Could not load TCEQ orders data. ${last}`);
 }
 
+function readQueryParam(search) {
+  try {
+    return (new URLSearchParams(search).get("q") || "").trim();
+  } catch (_) {
+    return "";
+  }
+}
+
+function readUrlQuery() {
+  let q = readQueryParam(location.search);
+  if (q) return q;
+
+  q = String(window.__TEXMETRICS_Q__ || "").trim();
+  if (q) return q;
+
+  if (location.hash) {
+    q = readQueryParam(location.hash.replace(/^#/, ""));
+    if (q) return q;
+  }
+
+  try {
+    if (window.parent && window.parent !== window) {
+      q = readQueryParam(window.parent.location.search);
+      if (q) return q;
+    }
+  } catch (_) {}
+
+  try {
+    if (document.referrer) {
+      q = readQueryParam(new URL(document.referrer).search);
+      if (q) return q;
+    }
+  } catch (_) {}
+
+  return "";
+}
+
+function isMapQueryMessage(event) {
+  const data = event.data;
+  if (!data || typeof data !== "object" || data.type !== "texmetrics-set-query") return false;
+  const origin = event.origin || "";
+  if (origin === location.origin) return true;
+  if (origin === "https://www.texmetrics.com" || origin === "https://texmetrics.com") return true;
+  if (origin === "https://shenandoah19.github.io") return true;
+  return /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
+}
+
 async function main() {
   const embed = document.documentElement.dataset.embed === "true";
   const payload = await loadOrders();
-  const urlQuery = new URLSearchParams(location.search).get("q")?.trim() || "";
+  let urlQuery = readUrlQuery();
 
   const filters = {
     query: urlQuery,
@@ -277,7 +324,7 @@ async function main() {
         <div class="search-row">
           <label class="search">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3-3"/></svg>
-            <input id="query" placeholder="Search customer, RN, site, case, or county" />
+            <input id="query" value="${escapeHtml(urlQuery)}" placeholder="Search customer, RN, site, case, or county" />
           </label>
           <div class="selects">
             <select id="program"><option value="">All programs</option>${payload.programs.map((p) => `<option>${escapeHtml(p)}</option>`).join("")}</select>
@@ -326,7 +373,7 @@ async function main() {
     zoomControl: false,
   });
   L.control.zoom({ position: "topright" }).addTo(map);
-  if (!mobile) document.getElementById("filterFold").open = true;
+  if (!mobile || urlQuery) document.getElementById("filterFold").open = true;
   L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
     attribution: "&copy; OpenStreetMap &copy; CARTO",
     subdomains: "abcd",
@@ -438,8 +485,19 @@ async function main() {
 
     if (!focusedSearch && urlQuery && sites.length) {
       focusedSearch = true;
-      if (sites.length === 1) map.flyTo([sites[0].lat, sites[0].lon], 10, { duration: 0.6 });
-      else map.fitBounds(sites.map((site) => [site.lat, site.lon]), { padding: [40, 40], maxZoom: 10 });
+      const rnQ = urlQuery.toUpperCase();
+      const rnMatch = /^RN\d+$/i.test(urlQuery)
+        ? sites.find((site) => (site.rn || "").toUpperCase() === rnQ)
+        : null;
+      if (sites.length === 1) {
+        map.flyTo([sites[0].lat, sites[0].lon], 10, { duration: 0.6 });
+        showDetail(sites[0]);
+      } else if (rnMatch) {
+        map.flyTo([rnMatch.lat, rnMatch.lon], 10, { duration: 0.6 });
+        showDetail(rnMatch);
+      } else {
+        map.fitBounds(sites.map((site) => [site.lat, site.lon]), { padding: [40, 40], maxZoom: 10 });
+      }
     }
 
     drawChips();
@@ -657,6 +715,30 @@ async function main() {
   document.getElementById("detail").innerHTML = `<p class="kicker">Selected site</p><p class="meta" style="margin-top:8px">Click a pin to see every agreed order and violation count at that RN.</p>`;
 
   document.getElementById("query").addEventListener("input", (e) => { filters.query = e.target.value; render(); });
+
+  function applyUrlSearch(q) {
+    q = String(q || "").trim();
+    if (!q || q === urlQuery) return;
+    urlQuery = q;
+    window.__TEXMETRICS_Q__ = q;
+    focusedSearch = false;
+    filters.query = q;
+    Object.assign(filters, applyPreset("all", payload.meta.dateMin, payload.meta.dateMax));
+    const input = document.getElementById("query");
+    if (input) input.value = q;
+    document.getElementById("filterFold").open = true;
+    render();
+  }
+
+  window.addEventListener("message", (event) => {
+    if (!isMapQueryMessage(event)) return;
+    applyUrlSearch(event.data.q);
+  });
+  try {
+    if (window.parent && window.parent !== window) {
+      window.parent.postMessage({ type: "texmetrics-request-query" }, "*");
+    }
+  } catch (_) {}
   document.getElementById("program").addEventListener("change", (e) => { filters.program = e.target.value; render(); });
   document.getElementById("reClass").addEventListener("change", (e) => { filters.reClass = e.target.value; render(); });
   document.getElementById("biz").addEventListener("change", (e) => { filters.biz = e.target.value; render(); });

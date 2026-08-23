@@ -13,6 +13,24 @@
   </head>
   <body>
     <div class="app" id="app">Loading map…</div>
+    <script>
+      (function () {
+        window.__TEXMETRICS_Q__ = (new URLSearchParams(location.search).get("q") || "").trim();
+        window.addEventListener("message", function (event) {
+          var data = event.data;
+          if (!data || data.type !== "texmetrics-set-query") return;
+          var q = String(data.q || "").trim();
+          if (q) window.__TEXMETRICS_Q__ = q;
+        });
+        try {
+          if (parent !== window) {
+            var parentQ = (new URLSearchParams(parent.location.search).get("q") || "").trim();
+            if (parentQ) window.__TEXMETRICS_Q__ = parentQ;
+            parent.postMessage({ type: "texmetrics-request-query" }, "*");
+          }
+        } catch (e) {}
+      })();
+    </script>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="./app.js"></script>
   </body>
