@@ -275,7 +275,7 @@
       "        ? \"The PDF opened in a new tab and started downloading. If you do not see it, use the buttons below.\"",
       "        : \"Your browser held the new tab. Open the PDF here so you can see the file.\";",
       "      if (fileEl) fileEl.textContent = fileName;",
-      "      if (form) form.hidden = false;",
+      "      if (form) form.hidden = true;",
       "      if (ready) ready.hidden = false;",
       "      document.getElementById(\"earlyAccessOpenPdf\")?.focus();",
     ].join("\n")
