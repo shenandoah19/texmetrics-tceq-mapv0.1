@@ -17,7 +17,7 @@
 .order-popup .popup-cta {
   display: block;
   width: 100%;
-  margin-top: 10px;
+  margin: 10px 0 8px;
   padding: 11px 12px;
   box-sizing: border-box;
   white-space: normal;
@@ -25,8 +25,7 @@
 
 .leaflet-popup-content {
   margin: 12px 14px 14px;
-  max-height: 280px;
-  overflow: auto;
+  overflow: visible;
 }
 .order-popup h3 {
   overflow: hidden;
@@ -38,6 +37,8 @@
   padding-left: 18px;
   font-size: 11px;
   line-height: 1.35;
+  max-height: 70px;
+  overflow: auto;
 }
 
 .modal-ready { margin-top: 4px; }
