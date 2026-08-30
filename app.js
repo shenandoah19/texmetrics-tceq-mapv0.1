@@ -53,11 +53,31 @@
   );
 
   src = src.replace(
+    '    <div><dt>Business</dt><dd>${escapeHtml(site.biz || "Unknown")}</dd></div>\n    <div><dt>Place</dt><dd>${escapeHtml(place)}</dd></div>\n    <div><dt>Location</dt><dd>${site.loc === "site" ? "Facility site" : "County center"}</dd></div>\n    <div><dt>Violations</dt><dd>${escapeHtml(violLine(site))}</dd></div>\n',
+    ""
+  );
+
+  src = src.replace(
     '<ol class="order-list">${items}${more}</ol>\n  </div>`;',
-    '<ol class="order-list">${items}${more}</ol>\n    ${reportCtaHtml(site, "popup-cta")}\n  </div>`;'
+    '${reportCtaHtml(site, "popup-cta")}\n    <ol class="order-list">${items}${more}</ol>\n  </div>`;'
   );
 
   src = src.replace("Top 10 customers", "Top 10 sites");
+
+  src = src.replace(
+    `<section class="card"><p class="kicker">Ranked by payable</p>
+          <div class="rank-head"><h2 id="rankTitle">Top 10 sites</h2>
+            <div class="chips tight" id="topLimit"></div>
+          </div>
+          <ol class="rank" id="rank"></ol></section>
+        <section class="card detail dash" id="detail"></section>`,
+    `<section class="card detail dash" id="detail"></section>
+        <section class="card"><p class="kicker">Ranked by payable</p>
+          <div class="rank-head"><h2 id="rankTitle">Top 10 sites</h2>
+            <div class="chips tight" id="topLimit"></div>
+          </div>
+          <ol class="rank" id="rank"></ol></section>`
+  );
 
   src = src.replace(
     "  const layer = L.layerGroup().addTo(map);",
@@ -104,7 +124,7 @@
 
   src = src.replace(
     "      if (!mobile) marker.bindPopup(popupHtml(site), { maxWidth: 340, autoPanPadding: [24, 24] });",
-    "      if (!mobile) marker.bindPopup(popupHtml(site), { maxWidth: 340, maxHeight: 320, autoPanPaddingTopLeft: [16, 56], autoPanPaddingBottomRight: [16, 24], autoPanPadding: [48, 56] });"
+    "      if (!mobile) marker.bindPopup(popupHtml(site), { maxWidth: 340, autoPanPaddingTopLeft: [16, 56], autoPanPaddingBottomRight: [16, 24], autoPanPadding: [48, 56] });"
   );
 
   src = src.replace(
@@ -149,7 +169,7 @@
 
   src = src.replace(
     "    document.getElementById(\"reportCta\").addEventListener(\"click\", showEarlyAccess);\n  }",
-    "    document.getElementById(\"reportCta\") && document.getElementById(\"reportCta\").addEventListener(\"click\", showEarlyAccess);\n    highlightRank(site);\n  }"
+    "    document.getElementById(\"reportCta\") && document.getElementById(\"reportCta\").addEventListener(\"click\", showEarlyAccess);\n    highlightRank(site);\n    const aside = document.querySelector(\"aside\");\n    const detailEl = document.getElementById(\"detail\");\n    if (aside && detailEl && aside.firstElementChild !== detailEl) aside.insertBefore(detailEl, aside.firstElementChild);\n  }"
   );
 
   src = src.replace(
