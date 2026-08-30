@@ -1,0 +1,10 @@
+.rank-row { cursor: pointer; padding: 6px 4px; border-radius: 8px; }
+.rank-row.on { background: rgba(201, 106, 74, 0.12); }
+.rank-row:hover { background: rgba(255, 255, 255, 0.04); }
+.order-popup .popup-cta {
+  display: block;
+  width: 100%;
+  margin-top: 12px;
+  padding: 9px 12px;
+  box-sizing: border-box;
+}
