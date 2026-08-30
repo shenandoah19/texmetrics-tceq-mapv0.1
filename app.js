@@ -44,6 +44,15 @@
   );
 
   src = src.replace(
+    "const items = site.orders.slice(0, 8).map((order) =>",
+    "const items = site.orders.slice(0, 3).map((order) =>"
+  );
+  src = src.replace(
+    'const more = site.count > 8 ? `<li>+${site.count - 8} more agreed orders</li>` : "";',
+    'const more = site.count > 3 ? `<li>+${site.count - 3} more on the full report</li>` : "";'
+  );
+
+  src = src.replace(
     '<ol class="order-list">${items}${more}</ol>\n  </div>`;',
     '<ol class="order-list">${items}${more}</ol>\n    ${reportCtaHtml(site, "popup-cta")}\n  </div>`;'
   );
@@ -95,7 +104,7 @@
 
   src = src.replace(
     "      if (!mobile) marker.bindPopup(popupHtml(site), { maxWidth: 340, autoPanPadding: [24, 24] });",
-    "      if (!mobile) marker.bindPopup(popupHtml(site), { maxWidth: 360, autoPanPadding: [24, 24] });"
+    "      if (!mobile) marker.bindPopup(popupHtml(site), { maxWidth: 340, maxHeight: 320, autoPanPaddingTopLeft: [16, 56], autoPanPaddingBottomRight: [16, 24], autoPanPadding: [48, 56] });"
   );
 
   src = src.replace(
@@ -168,6 +177,107 @@
       "      if (rn) showEarlyAccess();",
       "    });",
       "  });",
+    ].join("\n")
+  );
+
+  src = src.replace(
+    "          <p class=\"modal-lead\">Enter the early-access password to generate the compliance report.</p>",
+    "          <p class=\"modal-lead\">Enter the early-access password to generate the compliance report. The PDF will open in a new tab and download.</p>"
+  );
+
+  src = src.replace(
+    "            </div>\n          </form>\n        </div>`;",
+    [
+      "            </div>",
+      "          </form>",
+      "          <div class=\"modal-ready\" id=\"earlyAccessReady\" hidden>",
+      "            <p class=\"modal-ready-file\" id=\"earlyAccessReadyFile\"></p>",
+      "            <div class=\"modal-actions modal-ready-actions\">",
+      "              <button type=\"button\" class=\"modal-submit\" id=\"earlyAccessOpenPdf\">Open PDF</button>",
+      "              <button type=\"button\" class=\"modal-cancel\" id=\"earlyAccessDownloadPdf\">Download PDF</button>",
+      "            </div>",
+      "            <button type=\"button\" class=\"modal-close-link\" id=\"earlyAccessDone\">Close</button>",
+      "          </div>",
+      "        </div>`;",
+    ].join("\n")
+  );
+
+  src = src.replace(
+    "      overlay.querySelector(\"#earlyAccessCancel\").addEventListener(\"click\", hideEarlyAccess);\n      overlay.querySelector(\"#earlyAccessForm\").addEventListener(\"submit\", generateReport);\n      document.body.appendChild(overlay);",
+    [
+      "      overlay.querySelector(\"#earlyAccessCancel\").addEventListener(\"click\", hideEarlyAccess);",
+      "      overlay.querySelector(\"#earlyAccessForm\").addEventListener(\"submit\", generateReport);",
+      "      overlay.querySelector(\"#earlyAccessDone\").addEventListener(\"click\", hideEarlyAccess);",
+      "      overlay.querySelector(\"#earlyAccessOpenPdf\").addEventListener(\"click\", () => {",
+      "        if (window.__texmetricsPdfUrl) window.open(window.__texmetricsPdfUrl, \"_blank\", \"noopener\");",
+      "      });",
+      "      overlay.querySelector(\"#earlyAccessDownloadPdf\").addEventListener(\"click\", () => {",
+      "        if (!window.__texmetricsPdfUrl) return;",
+      "        const a = document.createElement(\"a\");",
+      "        a.href = window.__texmetricsPdfUrl;",
+      "        a.download = window.__texmetricsPdfName || \"TexMetrics_Compliance_Report.pdf\";",
+      "        a.rel = \"noopener\";",
+      "        document.body.appendChild(a);",
+      "        a.click();",
+      "        a.remove();",
+      "      });",
+      "      document.body.appendChild(overlay);",
+    ].join("\n")
+  );
+
+  src = src.replace(
+    "    setReportBusy(false);\n    setReportError(\"\");\n    overlay.classList.add(\"open\");",
+    [
+      "    setReportBusy(false);",
+      "    setReportError(\"\");",
+      "    const form = overlay.querySelector(\"#earlyAccessForm\");",
+      "    const ready = overlay.querySelector(\"#earlyAccessReady\");",
+      "    const title = overlay.querySelector(\"#earlyAccessTitle\");",
+      "    const lead = overlay.querySelector(\".modal-lead\");",
+      "    if (form) form.hidden = false;",
+      "    if (ready) ready.hidden = true;",
+      "    if (title) title.textContent = \"Early Access\";",
+      "    if (lead) lead.textContent = \"Enter the early-access password to generate the compliance report. The PDF will open in a new tab and download.\";",
+      "    overlay.classList.add(\"open\");",
+    ].join("\n")
+  );
+
+  src = src.replace(
+    "      const url = URL.createObjectURL(blob);\n      const a = document.createElement(\"a\");\n      a.href = url;\n      a.download = `TexMetrics_${rn}_Compliance_Report.pdf`;\n      a.rel = \"noopener\";\n      document.body.appendChild(a);\n      a.click();\n      a.remove();\n      setTimeout(() => URL.revokeObjectURL(url), 1500);\n      hideEarlyAccess();",
+    [
+      "      if (window.__texmetricsPdfUrl) {",
+      "        try { URL.revokeObjectURL(window.__texmetricsPdfUrl); } catch (_) {}",
+      "      }",
+      "      const url = URL.createObjectURL(blob);",
+      "      const fileName = `TexMetrics_${rn}_Compliance_Report.pdf`;",
+      "      window.__texmetricsPdfUrl = url;",
+      "      window.__texmetricsPdfName = fileName;",
+      "      try {",
+      "        const a = document.createElement(\"a\");",
+      "        a.href = url;",
+      "        a.download = fileName;",
+      "        a.rel = \"noopener\";",
+      "        a.target = \"_blank\";",
+      "        document.body.appendChild(a);",
+      "        a.click();",
+      "        a.remove();",
+      "      } catch (_) {}",
+      "      const opened = window.open(url, \"_blank\", \"noopener\");",
+      "      setReportBusy(false);",
+      "      const overlay = document.getElementById(\"earlyAccess\");",
+      "      const form = document.getElementById(\"earlyAccessForm\");",
+      "      const ready = document.getElementById(\"earlyAccessReady\");",
+      "      const title = document.getElementById(\"earlyAccessTitle\");",
+      "      const lead = overlay && overlay.querySelector(\".modal-lead\");",
+      "      const fileEl = document.getElementById(\"earlyAccessReadyFile\");",
+      "      if (title) title.textContent = \"Report ready\";",
+      "      if (lead) lead.textContent = opened",
+      "        ? \"The PDF opened in a new tab and started downloading. If you do not see it, use the buttons below.\"",
+      "        : \"Your browser held the new tab. Open the PDF here so you can see the file.\";",
+      "      if (fileEl) fileEl.textContent = fileName;",
+      "      if (form) form.hidden = false;",
+      "      if (ready) ready.hidden = false;",
+      "      document.getElementById(\"earlyAccessOpenPdf\")?.focus();",
     ].join("\n")
   );
 
