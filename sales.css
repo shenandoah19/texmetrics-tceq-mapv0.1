@@ -21,6 +21,10 @@
   padding: 11px 12px;
   box-sizing: border-box;
   white-space: normal;
+  cursor: pointer;
+  pointer-events: auto;
+  position: relative;
+  z-index: 500;
 }
 
 .leaflet-popup-content {
