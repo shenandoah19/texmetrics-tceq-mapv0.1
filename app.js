@@ -196,6 +196,33 @@
     "    if (openPopup && rec && rec.marker && rec.marker.getPopup()) rec.marker.openPopup();",
     "    if (mobile) document.getElementById(\"detail\").scrollIntoView({ behavior: \"smooth\", block: \"start\" });",
     "  }",
+    "  function buyFromFilteredSites(sites, q) {",
+    "    q = String(q || \"\").trim();",
+    "    if (!q) return;",
+    "    const qn = q.toUpperCase();",
+    "    const exactRn = /^RN\\d{9}$/.test(qn);",
+    "    const exact = exactRn ? sites.find((s) => (s.rn || \"\").toUpperCase() === qn) : null;",
+    "    if (exact) {",
+    "      selectSite(exact, { openPopup: !mobile, fly: true });",
+    "      showEarlyAccess();",
+    "      return;",
+    "    }",
+    "    if (sites.length === 1) {",
+    "      selectSite(sites[0], { openPopup: !mobile, fly: true });",
+    "      showEarlyAccess();",
+    "      return;",
+    "    }",
+    "    const ranked = topSites(sites, filters.topLimit || 10);",
+    "    if (ranked[0]) selectSite(ranked[0], { openPopup: !mobile, fly: true });",
+    "  }",
+    "  function submitSearchBuy() {",
+    "    const input = document.getElementById(\"query\");",
+    "    const q = ((input && input.value) || \"\").trim();",
+    "    if (!q) return;",
+    "    filters.query = q;",
+    "    render();",
+    "    buyFromFilteredSites(groupSites(filterOrders(payload.orders, filters)), q);",
+    "  }",
     "",
   ].join("\n");
 
@@ -214,6 +241,21 @@
   if (src.includes('applyPreset("all"')) {
     throw new Error("applyPreset all still present for urlQuery");
   }
+
+  src = src.replace(
+    "      const rnMatch = /^RN\\d+$/i.test(urlQuery)\n        ? sites.find((site) => (site.rn || \"\").toUpperCase() === rnQ)\n        : null;\n      if (sites.length === 1) {\n        map.flyTo([sites[0].lat, sites[0].lon], 10, { duration: 0.6 });\n        showDetail(sites[0]);\n      } else if (rnMatch) {\n        map.flyTo([rnMatch.lat, rnMatch.lon], 10, { duration: 0.6 });\n        showDetail(rnMatch);\n      } else {\n        map.fitBounds(sites.map((site) => [site.lat, site.lon]), { padding: [40, 40], maxZoom: 10 });\n      }",
+    "      buyFromFilteredSites(sites, urlQuery);"
+  );
+
+  src = src.replace(
+    "  document.getElementById(\"query\").addEventListener(\"input\", (e) => { filters.query = e.target.value; render(); });",
+    [
+      "  document.getElementById(\"query\").addEventListener(\"input\", (e) => { filters.query = e.target.value; render(); });",
+      "  document.getElementById(\"query\").addEventListener(\"keydown\", (e) => {",
+      "    if (e.key === \"Enter\") { e.preventDefault(); submitSearchBuy(); }",
+      "  });",
+    ].join("\n")
+  );
 
   src = src.replace(
     "    document.getElementById(\"reportCta\").addEventListener(\"click\", showEarlyAccess);\n  }",
