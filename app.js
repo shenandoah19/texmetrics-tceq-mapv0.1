@@ -142,6 +142,40 @@
     "    const title = siteLabel(site);"
   );
 
+  src = src.replace(
+    "    const orders = site.orders.slice(0, 12).map((order) =>\n      `<div class=\"row\"><dt>${escapeHtml(formatDate(order.orderDate))}</dt><dd>${escapeHtml(money.format(order.payable))} · ${escapeHtml(order.program)}</dd></div>`\n    ).join(\"\");\n    el.innerHTML = `\n      <p class=\"kicker\">Selected site</p>\n      <h2>${escapeHtml(title)}</h2>\n      <p class=\"amount\">${money.format(site.payable)}</p>\n      <p class=\"meta\">Total payable · ${site.count} agreed order${site.count === 1 ? \"\" : \"s\"}</p>\n      <div class=\"report-cta\">\n        <button type=\"button\" class=\"report-cta-button\" id=\"reportCta\" data-rn=\"${escapeHtml(rn)}\">Request compliance report for this RN</button>\n        <p>PDF: ratings, peers, enforcement history, linked agreed orders — public TCEQ data.</p>\n      </div>\n      <dl>\n        <div class=\"row\"><dt>RN</dt><dd>${rn ? escapeHtml(rn) : \"Not in source file\"}</dd></div>\n        <div class=\"row\"><dt>Rating</dt><dd>${escapeHtml(CLASS_LABEL[site.reClass] || \"Unclassified\")}</dd></div>\n        <div class=\"row\"><dt>Business</dt><dd>${escapeHtml(site.biz || \"Unknown\")}</dd></div>\n        <div class=\"row\"><dt>County</dt><dd>${escapeHtml(site.county)}</dd></div>\n        ${site.address || site.city ? `<div class=\"row\"><dt>Address</dt><dd>${escapeHtml([site.address, site.city].filter(Boolean).join(\", \"))}</dd></div>` : \"\"}\n        <div class=\"row\"><dt>Location</dt><dd>${site.loc === \"site\" ? \"Facility site\" : \"County center\"}</dd></div>\n        <div class=\"row\"><dt>Violations</dt><dd>${escapeHtml(violLine(site))}</dd></div>\n        ${orders}\n      </dl>\n    `;",
+    [
+      "    const orders = site.orders.slice(0, 3).map((order) =>",
+      "      `<div class=\"row\"><dt>${escapeHtml(formatDate(order.orderDate))}</dt><dd>${escapeHtml(money.format(order.payable))} · ${escapeHtml(order.program)}</dd></div>`",
+      "    ).join(\"\");",
+      "    const more = site.count > 3 ? `<p class=\"meta\">+${site.count - 3} more on the full report</p>` : \"\";",
+      "    const customerLine = title !== site.customer && site.customer",
+      "      ? `<p class=\"site\">${escapeHtml(site.customer)}</p>`",
+      "      : \"\";",
+      "    el.innerHTML = `",
+      "      <p class=\"kicker\">Selected site</p>",
+      "      <h2>${escapeHtml(title)}</h2>",
+      "      ${customerLine}",
+      "      <p class=\"amount\">${money.format(site.payable)}</p>",
+      "      <p class=\"meta\">Total payable · ${site.count} agreed order${site.count === 1 ? \"\" : \"s\"}</p>",
+      "      <dl>",
+      "        <div class=\"row\"><dt>RN</dt><dd>${rn ? escapeHtml(rn) : \"Not in source file\"}</dd></div>",
+      "        <div class=\"row\"><dt>Rating</dt><dd>${escapeHtml(CLASS_LABEL[site.reClass] || \"Unclassified\")}</dd></div>",
+      "      </dl>",
+      "      <div class=\"report-cta\">",
+      "        <button type=\"button\" class=\"report-cta-button\" id=\"reportCta\" data-rn=\"${escapeHtml(rn)}\">Get the TexMetrics report for this site</button>",
+      "        <p>PDF: ratings, peers, enforcement history, linked agreed orders — public TCEQ data.</p>",
+      "      </div>",
+      "      <dl>${orders}</dl>",
+      "      ${more}",
+      "    `;",
+    ].join("\n")
+  );
+
+  if (src.includes("site.orders.slice(0, 12)")) {
+    throw new Error("showDetail still slices 12 orders");
+  }
+
   const selectFns = [
     "  function highlightRank(site) {",
     "    const key = site ? siteKey(site) : \"\";",
@@ -166,6 +200,20 @@
   ].join("\n");
 
   src = src.replace("  function showDetail(site) {", selectFns + "  function showDetail(site) {");
+
+  src = src.replace(
+    "    ...(urlQuery\n      ? applyPreset(\"all\", payload.meta.dateMin, payload.meta.dateMax)\n      : applyPreset(\"5y\", payload.meta.dateMin, payload.meta.dateMax)),",
+    "    ...applyPreset(\"5y\", payload.meta.dateMin, payload.meta.dateMax),"
+  );
+
+  src = src.replace(
+    "    Object.assign(filters, applyPreset(\"all\", payload.meta.dateMin, payload.meta.dateMax));",
+    "    Object.assign(filters, applyPreset(\"5y\", payload.meta.dateMin, payload.meta.dateMax));"
+  );
+
+  if (src.includes('applyPreset("all"')) {
+    throw new Error("applyPreset all still present for urlQuery");
+  }
 
   src = src.replace(
     "    document.getElementById(\"reportCta\").addEventListener(\"click\", showEarlyAccess);\n  }",
