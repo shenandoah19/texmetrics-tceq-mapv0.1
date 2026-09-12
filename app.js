@@ -139,11 +139,6 @@
   );
 
   src = src.replace(
-    "Request compliance report for this RN",
-    "Get the TexMetrics report for this site"
-  );
-
-  src = src.replace(
     "    const title = site.siteName && site.siteName !== site.customer ? site.siteName : site.customer;",
     "    const title = siteLabel(site);"
   );
@@ -176,6 +171,22 @@
       "    `;",
     ].join("\n")
   );
+
+  src = src.replace(
+    '<button type="button" class="report-cta-button" id="reportCta" data-rn="${escapeHtml(rn)}">Get the TexMetrics report for this site</button>\n        <p>PDF: ratings, peers, enforcement history, linked agreed orders — public TCEQ data.</p>',
+    "${reportCtaHtml(site)}"
+  );
+  src = src.replace(
+    '<button type="button" class="report-cta-button" id="reportCta" data-rn="${escapeHtml(rn)}">Request compliance report for this RN</button>\n        <p>PDF: ratings, peers, enforcement history, linked agreed orders — public TCEQ data.</p>',
+    "${reportCtaHtml(site)}"
+  );
+  src = src.replace(
+    "Request compliance report for this RN",
+    "Get the TexMetrics report for this site"
+  );
+  if (!src.includes("${reportCtaHtml(site)}")) {
+    throw new Error("selected-card CTA was not patched");
+  }
 
   src = src.replace("site.orders.slice(0, 12)", "site.orders.slice(0, 3)");
 
