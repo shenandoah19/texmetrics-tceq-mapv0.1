@@ -5,8 +5,9 @@ This file is binding. Grok Build / any agent must read it before editing. A comm
 ## Product
 
 - This repo is the one-RN sale path: pins of TCEQ agreed orders → password → Railway generate-pdf.
+- List price $129 MAY display on the pin popup and selected-card Get-report CTA. Click opens the existing early-access password path for that RN. No Stripe. No $179.
 - Company pack lives on texmetrics.com/company-pack (Railway `/pack`). Do not add CN search, zip, or pack UI here.
-- Public sample is Covestro RN100209931. Do not special-case or market ONEOK. Pins may exist if TCEQ data has them.
+- Public sample is Covestro RN100209931: no price, no Buy. Report ready stays Open PDF and Download PDF. Do not special-case or market ONEOK. Pins may exist if TCEQ data has them.
 
 ## Must not break
 
@@ -24,5 +25,5 @@ This file is binding. Grok Build / any agent must read it before editing. A comm
 
 ## Out of scope
 
-- Stripe, prices, email blast, Framer homepage.
+- Stripe, $179, email blast, Framer homepage, pack UI on the map.
 - Title V default-on filter and search-opens-modal until specified in a later spec that also requires the map still to render.
