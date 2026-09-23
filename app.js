@@ -247,6 +247,7 @@
       "    if (rec && rec.site) showDetail(rec.site);",
       "    showEarlyAccess();",
       "  }",
+      "  window.__texmetricsOpenReport = openReportCta;",
       "  function onPopupReportClick(ev) {",
       "    const btn = ev.target && ev.target.closest && ev.target.closest(\".leaflet-popup .popup-cta, .leaflet-popup .report-cta-button\");",
       "    if (!btn) return;",
