@@ -12,6 +12,19 @@
   }
 
   const PIN = "#d45d4e";
+
+  window.__texmetricsPopupOptions = function () {
+    const map = window.__texmetricsMap;
+    const height = map && map.getSize ? map.getSize().y : 480;
+    return {
+      maxWidth: 340,
+      maxHeight: Math.max(160, Math.min(320, height - 88)),
+      autoPan: true,
+      keepInView: true,
+      autoPanPaddingTopLeft: [24, 48],
+      autoPanPaddingBottomRight: [24, 36],
+    };
+  };
   const LIST_CAP = 25;
   const EMPTY_KICKER = "Independent map of TCEQ public records";
   const SEARCH_KICKER = "Public TCEQ records. Not a TCEQ site.";
@@ -528,7 +541,7 @@
         opacity: 1,
       });
       if (rec) {
-        marker.bindPopup(popupHtml(rec), { maxWidth: 340, autoPanPaddingTopLeft: [16, 56], autoPanPaddingBottomRight: [16, 24] });
+        marker.bindPopup(popupHtml(rec), window.__texmetricsPopupOptions());
         marker.on("click", () => {
           choose(rec, false);
           marker.openPopup();

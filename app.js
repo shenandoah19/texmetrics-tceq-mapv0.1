@@ -161,7 +161,7 @@
 
   src = src.replace(
     "      if (!mobile) marker.bindPopup(popupHtml(site), { maxWidth: 340, autoPanPadding: [24, 24] });",
-    "      if (!mobile) marker.bindPopup(popupHtml(site), { maxWidth: 340, autoPanPaddingTopLeft: [16, 56], autoPanPaddingBottomRight: [16, 24], autoPanPadding: [48, 56] });"
+    "      if (!mobile) marker.bindPopup(popupHtml(site), window.__texmetricsPopupOptions());"
   );
 
   src = src.replace(

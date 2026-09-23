@@ -515,6 +515,12 @@ select, .chip, .year {
   }
   .filter-fold > summary::-webkit-details-marker { display: none; }
   .leaflet-control-zoom { margin-top: 8px !important; margin-right: 8px !important; }
+.leaflet-popup-content {
+  margin: 12px 14px;
+}
+.leaflet-popup-scrolled {
+  overflow-y: auto;
+}
 }
 
 .viol-hits {
