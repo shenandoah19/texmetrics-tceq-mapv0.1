@@ -278,6 +278,16 @@ select, .chip, .year {
 .bar i { display: block; height: 100%; background: var(--penalty); border-radius: inherit; }
 .rank .meta { margin: 4px 0 0; font-size: 12px; color: var(--subtle); }
 
+.detail { width: 100%; }
+.detail .order-list {
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 6px;
+  font-size: 14px;
+  line-height: 1.4;
+}
 .detail.dash { border-style: dashed; }
 .detail dl { display: grid; gap: 8px; margin: 16px 0 0; }
 .detail .row { display: grid; grid-template-columns: 96px 1fr; gap: 12px; font-size: 14px; }

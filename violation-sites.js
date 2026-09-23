@@ -20,6 +20,7 @@
   const money = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
 
   let mode = "orders";
+  window.__texmetricsMode = "orders";
   let violationSites = [];
   let byRn = new Map();
   let activeLayer = null;
@@ -75,17 +76,101 @@
     return map;
   }
 
+  function toIso(value) {
+    const text = String(value || "").trim();
+    if (/^\d{4}-\d{2}-\d{2}/.test(text)) return text.slice(0, 10);
+    const match = text.match(/^([A-Za-z]+)\s+(\d{1,2}),\s*(\d{4})$/);
+    if (!match) return "";
+    const months = { jan: "01", feb: "02", mar: "03", apr: "04", may: "05", jun: "06", jul: "07", aug: "08", sep: "09", oct: "10", nov: "11", dec: "12" };
+    const month = months[match[1].slice(0, 3).toLowerCase()];
+    if (!month) return "";
+    return match[3] + "-" + month + "-" + String(Number(match[2])).padStart(2, "0");
+  }
+
+  function yearSpan(filters) {
+    const from = toIso(filters && filters.dateFrom).slice(0, 4);
+    const to = toIso(filters && filters.dateTo).slice(0, 4);
+    if (!/^\d{4}$/.test(from) || !/^\d{4}$/.test(to)) return "";
+    return from + "–" + to;
+  }
+
   function payableInWindow(orders, filters) {
     let sum = 0;
-    const from = filters && filters.dateFrom;
-    const to = filters && filters.dateTo;
+    const from = toIso(filters && filters.dateFrom);
+    const to = toIso(filters && filters.dateTo);
     for (let i = 0; i < orders.length; i++) {
-      const date = orders[i].orderDate || "";
-      if (from && date < from) continue;
-      if (to && date > to) continue;
+      const date = toIso(orders[i].orderDate);
+      if (from && date && date < from) continue;
+      if (to && date && date > to) continue;
       sum += Number(orders[i].payable) || 0;
     }
     return sum;
+  }
+
+  function formatDate(iso) {
+    const [y, m, d] = String(toIso(iso) || "").split("-").map(Number);
+    if (!y || !m || !d) return String(iso || "");
+    return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString("en-US", {
+      month: "short", day: "numeric", year: "numeric", timeZone: "UTC",
+    });
+  }
+
+  function plainProgram(program) {
+    const text = String(program || "").trim().toLowerCase();
+    if (!text) return "";
+    return text.charAt(0).toUpperCase() + text.slice(1);
+  }
+
+  function orderLines(orders) {
+    return orders.slice().sort((a, b) => String(toIso(b.orderDate)).localeCompare(String(toIso(a.orderDate))));
+  }
+
+  function orderLine(order) {
+    return [formatDate(order.orderDate), money.format(Number(order.payable) || 0), plainProgram(order.program)]
+      .filter(Boolean)
+      .join(" · ");
+  }
+
+  const PROGRAM_WORDS = {
+    PWS: "Public water system",
+    WWPERMIT: "Wastewater",
+    PSTREG: "Petroleum storage",
+    AIROP: "Air quality",
+    AIREI: "Air quality",
+    AIRNSR: "Air quality",
+    IHW: "Industrial waste",
+    IHWCA: "Industrial waste",
+    TIRES: "Tires",
+    SDA: "Sludge",
+    P2PLAN: "Pollution prevention",
+  };
+
+  function identityLine(rec) {
+    const labels = [];
+    const programs = Array.isArray(rec.programs) ? rec.programs : [];
+    for (let i = 0; i < programs.length; i++) {
+      const label = PROGRAM_WORDS[programs[i]];
+      if (label && labels.indexOf(label) === -1) labels.push(label);
+    }
+    const bits = [];
+    if (labels.length === 1) bits.push(labels[0]);
+    if (rec.cn) bits.push(rec.cn);
+    return bits.join(" · ");
+  }
+
+  function ratingLabel(rec) {
+    const counts = {};
+    const orders = rec.orders || [];
+    for (let i = 0; i < orders.length; i++) {
+      const key = orders[i].reClass || "";
+      if (!key || key === "UNCLASSIFIED") continue;
+      counts[key] = (counts[key] || 0) + 1;
+    }
+    const best = Object.keys(counts).sort((a, b) => counts[b] - counts[a])[0];
+    if (best === "HIGH") return "High";
+    if (best === "SATISFACTORY") return "Satisfactory";
+    if (best === "UNSATISFACTORY") return "Unsatisfactory";
+    return "";
   }
 
   function payableAll(orders, viol) {
@@ -217,14 +302,6 @@
     return bits.join(" · ");
   }
 
-  function programLine(rec) {
-    const programs = Array.isArray(rec.programs) ? rec.programs.slice() : [];
-    programs.sort((a, b) => (a === "PWS" ? -1 : b === "PWS" ? 1 : a.localeCompare(b)));
-    const bits = programs.slice(0, 3);
-    if (rec.cn) bits.push(rec.cn);
-    return bits.join(" · ");
-  }
-
   function reportHtml(rn) {
     const label = rn === "RN100209931"
       ? "Get the TexMetrics report for this site"
@@ -239,40 +316,43 @@
     );
   }
 
+  function enforcementHtml(rec, limit) {
+    const orders = orderLines(rec.orders || []);
+    const shown = orders.slice(0, limit);
+    if (!shown.length) return "";
+    const items = shown.map((order) => "<li>" + escapeHtml(orderLine(order)) + "</li>").join("");
+    const more = orders.length > limit ? '<p class="meta">The rest are on the report.</p>' : "";
+    return '<ol class="order-list">' + items + "</ol>" + more;
+  }
+
   function paintCard(rec) {
     const el = document.getElementById("detail");
     if (!el || !rec) return;
     const payable = inWindow(rec);
     const outside = payable <= 0 && rec.payableAll > 0;
-    const open = payable <= 0;
     const county = countyLabel(rec.county);
     const rnLine = [rec.rn, county].filter(Boolean).join(" · ");
-    const programs = programLine(rec);
-    let hero = money.format(payable);
-    let note = '<p class="meta">' + escapeHtml(violationsLine(rec)) + "</p>";
-    let kicker = "Selected site";
-    if (outside) {
-      kicker = "Open violations";
-      hero = rec.violActive + " active";
-      note = '<p class="meta">' + escapeHtml(money.format(rec.payableAll) + " outside the selected years.") + "</p>";
-    } else if (open) {
-      kicker = "Open violations";
-      hero = rec.violActive + " active";
-      note = '<p class="meta">No agreed-order penalty in this extract.</p>';
-    }
+    const identity = identityLine(rec);
+    const rating = ratingLabel(rec);
+    const hero = payable > 0 ? money.format(payable) : rec.violActive + " active";
     const where = rec.loc === "county"
       ? '<p class="meta">Plotted at the county center. Facility coordinates were not in the extract.</p>'
       : "";
+    let penalty = "";
+    if (outside) penalty = '<p class="meta">' + escapeHtml(money.format(rec.payableAll) + " outside the selected years.") + "</p>";
+    else if (rec.payableAll <= 0) penalty = '<p class="meta">No agreed-order penalty in this extract.</p>';
     el.classList.remove("dash");
     el.dataset.siteRn = rec.rn;
     el.dataset.texmetricsCard = "1";
     el.innerHTML =
-      '<p class="kicker">' + escapeHtml(kicker) + "</p>" +
       "<h2>" + escapeHtml(rec.name) + "</h2>" +
       '<p class="amount">' + escapeHtml(hero) + "</p>" +
-      note +
+      '<p class="meta">' + escapeHtml(rec.violActive + " active · " + rec.violRepeat + " repeat") + "</p>" +
+      (rating ? '<p class="meta">' + escapeHtml(rating) + "</p>" : "") +
+      enforcementHtml(rec, 3) +
+      penalty +
       '<p class="meta">' + escapeHtml(rnLine) + "</p>" +
-      (programs ? '<p class="meta">' + escapeHtml(programs) + "</p>" : "") +
+      (identity ? '<p class="meta">' + escapeHtml(identity) + "</p>" : "") +
       where +
       '<div class="report-cta">' + reportHtml(rec.rn) + "</div>";
     const btn = document.getElementById("reportCta");
@@ -281,6 +361,34 @@
         if (typeof window.__texmetricsOpenReport === "function") window.__texmetricsOpenReport(rec.rn);
       });
     }
+  }
+
+  function popupHtml(rec) {
+    const orders = orderLines(rec.orders || []);
+    const shown = orders.slice(0, 8);
+    const items = shown.map((order) => "<li>" + escapeHtml(orderLine(order)) + "</li>").join("");
+    const more = orders.length > 8 ? "<li>+" + (orders.length - 8) + " more agreed orders</li>" : "";
+    const payable = inWindow(rec) > 0 ? inWindow(rec) : rec.payableAll;
+    const place = [rec.address, rec.city, countyLabel(rec.county)].filter(Boolean).join(", ");
+    const rating = ratingLabel(rec) || "Unclassified";
+    const label = rec.rn === "RN100209931"
+      ? "Get the TexMetrics report for this site"
+      : "Get the TexMetrics report for this site · $129";
+    return (
+      '<div class="order-popup"><h3>' + escapeHtml(rec.name) + "</h3>" +
+      (rec.customer && rec.customer !== rec.name ? '<p class="site">' + escapeHtml(rec.customer) + "</p>" : "") +
+      "<dl>" +
+      '<div><dt>Payable</dt><dd class="amount">' + escapeHtml(money.format(payable)) + "</dd></div>" +
+      "<div><dt>Orders</dt><dd>" + orders.length + " at this RN</dd></div>" +
+      "<div><dt>RN</dt><dd>" + escapeHtml(rec.rn) + "</dd></div>" +
+      "<div><dt>Rating</dt><dd>" + escapeHtml(rating) + "</dd></div>" +
+      "<div><dt>Place</dt><dd>" + escapeHtml(place) + "</dd></div>" +
+      "<div><dt>Violations</dt><dd>" + escapeHtml(rec.violActive + " active · " + rec.violRepeat + " repeat") + "</dd></div>" +
+      "</dl>" +
+      '<button type="button" class="report-cta-button popup-cta" data-rn="' + escapeHtml(rec.rn) + '">' + label + "</button>" +
+      '<p class="cta-disclaimer">Public TCEQ compilation. Not a Phase I. Not a TCEQ company rating. Not legal advice.</p>' +
+      '<ol class="order-list">' + items + more + "</ol></div>"
+    );
   }
 
   window.__texmetricsPaintCard = function (site) {
@@ -324,9 +432,10 @@
     if (selectLayer) selectLayer.clearLayers();
   }
 
-  function activeRadius(count, maxCount) {
-    const t = Math.sqrt(Math.max(count, 1) / Math.max(maxCount, 1));
-    return 3.2 + t * 6.2;
+  function activeRadius(count) {
+    const n = Math.max(Number(count) || 1, 1);
+    const t = Math.min(Math.log(n) / Math.log(50), 1.35);
+    return Math.min(16, 4 + t * 10);
   }
 
   function activeSites() {
@@ -352,22 +461,26 @@
     if (current && current.markersByKey) current.markersByKey.clear();
     layer.clearLayers();
     const rows = activeSites();
-    let maxCount = 1;
-    for (let i = 0; i < rows.length; i++) maxCount = Math.max(maxCount, Number(rows[i].violActive) || 0);
     activeRns = new Set();
+    const catalog = records();
     for (let i = 0; i < rows.length; i++) {
       const site = rows[i];
       const pair = finitePair(site.lat, site.lon);
+      const rec = catalog.get(site.rn);
       activeRns.add(site.rn);
       const marker = L.circleMarker([pair.lat, pair.lon], {
-        radius: activeRadius(Number(site.violActive) || 0, maxCount),
+        radius: activeRadius(site.violActive),
         color: PIN,
         weight: 1,
         fillColor: PIN,
         fillOpacity: 0.85,
         opacity: 1,
       });
-      marker.on("click", () => choose(records().get(site.rn), false));
+      if (rec) marker.bindPopup(popupHtml(rec), { maxWidth: 340, autoPanPaddingTopLeft: [16, 56], autoPanPaddingBottomRight: [16, 24] });
+      marker.on("click", () => {
+        if (rec) choose(rec, false);
+        if (rec && !window.matchMedia("(max-width: 720px)").matches) marker.openPopup();
+      });
       marker.addTo(layer);
     }
   }
@@ -392,20 +505,27 @@
   }
 
   function showSelectPin(rec) {
-    if (!rec || onLayer(rec.rn) || !Number.isFinite(rec.lat) || !Number.isFinite(rec.lon)) {
+    if (!rec || !Number.isFinite(rec.lat) || !Number.isFinite(rec.lon)) {
+      clearSelectPin();
+      return;
+    }
+    const searching = queryEl && queryEl.value.trim();
+    const orangeOnRed = mode === "active" && !!searching;
+    if (!orangeOnRed && onLayer(rec.rn)) {
       clearSelectPin();
       return;
     }
     const layer = ensureSelectLayer();
-    if (!layer) return;
+    const map = mapObj();
+    if (!layer || !map) return;
     layer.clearLayers();
-    const radius = mode === "active" ? activeRadius(rec.violActive || 1, rec.violActive || 1) : 7;
+    layer.addTo(map);
     L.circleMarker([rec.lat, rec.lon], {
-      radius: radius,
-      color: mode === "orders" && rec.payableAll > 0 ? "#c96a4a" : PIN,
+      radius: Math.max(8, activeRadius(rec.violActive || 1)),
+      color: "#c96a4a",
       weight: 2,
-      fillColor: mode === "orders" && rec.payableAll > 0 ? "#c96a4a" : PIN,
-      fillOpacity: 0.9,
+      fillColor: "#c96a4a",
+      fillOpacity: 0.95,
       opacity: 1,
     }).addTo(layer);
   }
@@ -495,7 +615,7 @@
       legend.innerHTML = '<p class="kicker">One pin per RN</p><p>Size = total payable at site</p><p>Glow = $100k+ · ring = rating</p>';
     }
     const card = rankCard();
-    const kicker = card && card.querySelector(".kicker");
+    const kicker = document.getElementById("rankKicker");
     if (kicker) kicker.textContent = "Ranked by payable";
     const lede = document.querySelector("header .lede");
     if (lede) lede.textContent = "One pin per facility RN. Size is total payable at that site. Glow marks $100,000 or more. Ring color is compliance rating.";
@@ -507,7 +627,7 @@
       legend.innerHTML = '<p class="kicker">One pin per site</p><p>Size = active violations. Not a fine.</p>';
     }
     const lede = document.querySelector("header .lede");
-    if (lede) lede.textContent = "One pin per site with an active violation. Size is the active count. Not a fine.";
+    if (lede) lede.textContent = "Size = active violations. Not a fine.";
     let sitesN = 0;
     let activeN = 0;
     const counties = new Set();
@@ -522,12 +642,12 @@
       stats.innerHTML =
         '<div class="stat"><dt>Sites with active violations</dt><dd>' + sitesN.toLocaleString() + "</dd><p>Active right now</p></div>" +
         '<div class="stat"><dt>Active violations</dt><dd>' + activeN.toLocaleString() + "</dd><p>Not a payable total</p></div>" +
-        '<div class="stat"><dt>Date span</dt><dd>' + escapeHtml((filters.dateFrom || "").slice(0, 4) + "–" + (filters.dateTo || "").slice(0, 4)) + "</dd><p>Selected range</p></div>" +
+        '<div class="stat"><dt>Date span</dt><dd>' + escapeHtml(yearSpan(filters)) + "</dd><p>Selected range</p></div>" +
         '<div class="stat"><dt>Counties</dt><dd>' + counties.size.toLocaleString() + "</dd><p>Sites on this layer</p></div>";
     }
     const card = rankCard();
     if (!card || card.hidden) return;
-    const kicker = card.querySelector(".kicker");
+    const kicker = document.getElementById("rankKicker");
     if (kicker) kicker.textContent = "Ranked by active violations";
     const ranked = rows.slice().sort((a, b) => (Number(b.violActive) || 0) - (Number(a.violActive) || 0));
     const limit = Number(filters.topLimit) || 10;
@@ -627,6 +747,7 @@
           const btn = event.target.closest("[data-mode]");
           if (!btn || btn.getAttribute("data-mode") === mode) return;
           mode = btn.getAttribute("data-mode");
+          window.__texmetricsMode = mode;
           const current = state();
           if (current && typeof current.render === "function") current.render();
           else afterRender();

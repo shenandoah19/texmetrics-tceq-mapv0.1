@@ -31,6 +31,37 @@
     "function topSites(sites, limit) {",
     "  return sites.slice().sort(function (a, b) { return b.payable - a.payable || b.count - a.count; }).slice(0, limit || 10);",
     "}",
+    "function toIsoDate(value) {",
+    "  const text = String(value || \"\").trim();",
+    "  if (/^\\d{4}-\\d{2}-\\d{2}/.test(text)) return text.slice(0, 10);",
+    "  const match = text.match(/^([A-Za-z]+)\\s+(\\d{1,2}),\\s*(\\d{4})$/);",
+    "  if (!match) return text;",
+    "  const months = { jan: \"01\", feb: \"02\", mar: \"03\", apr: \"04\", may: \"05\", jun: \"06\", jul: \"07\", aug: \"08\", sep: \"09\", oct: \"10\", nov: \"11\", dec: \"12\" };",
+    "  const month = months[match[1].slice(0, 3).toLowerCase()];",
+    "  if (!month) return text;",
+    "  return match[3] + \"-\" + month + \"-\" + String(match[2]).padStart(2, \"0\");",
+    "}",
+    "function normalizeOrderDates(payload) {",
+    "  if (!payload) return;",
+    "  const orders = payload.orders || [];",
+    "  let latest = \"\";",
+    "  let earliest = \"\";",
+    "  orders.forEach(function (order) {",
+    "    order.orderDate = toIsoDate(order.orderDate);",
+    "    if (order.orderDate && (!latest || order.orderDate > latest)) latest = order.orderDate;",
+    "    if (order.orderDate && (!earliest || order.orderDate < earliest)) earliest = order.orderDate;",
+    "  });",
+    "  if (payload.meta) {",
+    "    payload.meta.dateMin = earliest || toIsoDate(payload.meta.dateMin);",
+    "    const statedMax = toIsoDate(payload.meta.dateMax);",
+    "    payload.meta.dateMax = latest && (!statedMax || statedMax < latest) ? latest : statedMax;",
+    "  }",
+    "}",
+    "function plainProgram(program) {",
+    "  const text = String(program || \"\").trim().toLowerCase();",
+    "  if (!text) return \"\";",
+    "  return text.charAt(0).toUpperCase() + text.slice(1);",
+    "}",
     "function reportCtaHtml(site, extraClass) {",
     "  const rn = (site.rn || \"\").trim().toUpperCase();",
     "  if (!rn) return '<p class=\"meta\">No RN in the source file \u2014 report not available.</p>';",
@@ -120,7 +151,7 @@
 
   src = src.replace(
     "    layer.clearLayers();",
-    "    layer.clearLayers();\n    markersByKey.clear();"
+    "    layer.clearLayers();\n    markersByKey.clear();\n    if (window.__texmetricsMode === \"active\") {\n      drawChips();\n      bindChips();\n      if (window.__texmetricsAfterRender) window.__texmetricsAfterRender();\n      return;\n    }"
   );
 
   src = src.replace(
@@ -373,6 +404,19 @@
   );
 
   src = src.replace(
+    "  const payload = await loadOrders();",
+    "  const payload = await loadOrders();\n  normalizeOrderDates(payload);"
+  );
+  src = src.replace("<h1>Agreed Orders</h1>", "<h1>Texas sites</h1>");
+  src = src.replace(
+    "`<li>${escapeHtml(formatDate(order.orderDate))} · ${escapeHtml(money.format(order.payable))} · ${escapeHtml(order.program)}</li>`",
+    "`<li>${escapeHtml(formatDate(order.orderDate))} · ${escapeHtml(money.format(order.payable))} · ${escapeHtml(plainProgram(order.program))}</li>`"
+  );
+  src = src.replaceAll(
+    '<p class="kicker">Ranked by payable</p>',
+    '<p class="kicker" id="rankKicker">Ranked by payable</p>'
+  );
+  src = src.replace(
     "    document.getElementById(\"viols\").innerHTML = `\n      <button class=\"chip${filters.hasActive ? \" on\" : \"\"}\" data-viol=\"hasActive\">Active violations</button>\n      <button class=\"chip${filters.hasRepeat ? \" on\" : \"\"}\" data-viol=\"hasRepeat\">Repeats</button>\n      <button class=\"chip${filters.hasMajor ? \" on\" : \"\"}\" data-viol=\"hasMajor\">Major</button>`;",
     "    document.getElementById(\"viols\").innerHTML = \"\";"
   );
@@ -385,7 +429,7 @@
   );
   src = src.replace(
     "  render();\n}\n\nmain().catch",
-    "  window.__texmetricsMapState = { filters: filters, payload: payload, map: map, layer: layer, markersByKey: markersByKey };\n  render();\n}\n\nmain().catch"
+    "  window.__texmetricsMapState = { filters: filters, payload: payload, map: map, layer: layer, markersByKey: markersByKey, render: render };\n  render();\n}\n\nmain().catch"
   );
 
   const script = document.createElement("script");
