@@ -414,6 +414,18 @@
     return (state() && state().map) || window.__texmetricsMap || null;
   }
 
+  function svgRenderer(paneName, zIndex) {
+    const map = mapObj();
+    if (!map || !window.L) return null;
+    if (!map.getPane(paneName)) {
+      const pane = map.createPane(paneName);
+      pane.style.zIndex = String(zIndex);
+    }
+    if (!svgRenderer.cache) svgRenderer.cache = {};
+    if (!svgRenderer.cache[paneName]) svgRenderer.cache[paneName] = L.svg({ pane: paneName });
+    return svgRenderer.cache[paneName];
+  }
+
   function ensureActiveLayer() {
     const map = mapObj();
     if (!map || !window.L) return null;
@@ -438,16 +450,53 @@
     return Math.min(16, 4 + t * 10);
   }
 
-  function activeSites() {
+  function payableTotal(rec) {
+    const viol = byRn.get(rec.rn);
+    if (viol && viol.payable != null && viol.payable !== "") return Number(viol.payable) || 0;
+    return rec.payableAll || 0;
+  }
+
+  function ordersInSpan(rec, filters) {
+    const from = toIso(filters.dateFrom);
+    const to = toIso(filters.dateTo);
+    return (rec.orders || []).filter((order) => {
+      const date = toIso(order.orderDate);
+      if (from && (!date || date < from)) return false;
+      if (to && (!date || date > to)) return false;
+      return true;
+    });
+  }
+
+  function passesActiveFilters(rec) {
+    if (!(Number(rec.violActive) > 0)) return false;
+    if (!finitePair(rec.lat, rec.lon)) return false;
     const filters = filtersNow();
-    const county = filters.county ? String(filters.county).toUpperCase() : "";
+    if (payableTotal(rec) < (Number(filters.minPayable) || 0)) return false;
+    const county = String(filters.county || "").toUpperCase();
+    if (county) {
+      const own = String(rec.county || "").toUpperCase() === county;
+      const any = (rec.orderCounties || []).some((item) => String(item).toUpperCase() === county);
+      if (!own && !any) return false;
+    }
+    const orders = rec.orders || [];
+    const ranged = ordersInSpan(rec, filters);
+    if (orders.length && !ranged.length) return false;
+    if (filters.program || filters.reClass || filters.biz) {
+      const hit = ranged.some((order) => {
+        if (filters.program && order.program !== filters.program) return false;
+        if (filters.reClass && (order.reClass || "UNCLASSIFIED") !== filters.reClass) return false;
+        if (filters.biz && (order.biz || "Unknown") !== filters.biz) return false;
+        return true;
+      });
+      if (!hit) return false;
+    }
+    return true;
+  }
+
+  function activeSites() {
     const rows = [];
-    byRn.forEach((site) => {
-      if (!(Number(site.violActive) > 0)) return;
-      if (county && String(site.county || "").toUpperCase() !== county) return;
-      const pair = finitePair(site.lat, site.lon);
-      if (!pair) return;
-      rows.push(site);
+    records().forEach((rec) => {
+      if (passesActiveFilters(rec)) rows.push(rec);
     });
     return rows;
   }
@@ -469,6 +518,8 @@
       const rec = catalog.get(site.rn);
       activeRns.add(site.rn);
       const marker = L.circleMarker([pair.lat, pair.lon], {
+        renderer: svgRenderer("activePins", 640),
+        pane: "activePins",
         radius: activeRadius(site.violActive),
         color: PIN,
         weight: 1,
@@ -476,11 +527,13 @@
         fillOpacity: 0.85,
         opacity: 1,
       });
-      if (rec) marker.bindPopup(popupHtml(rec), { maxWidth: 340, autoPanPaddingTopLeft: [16, 56], autoPanPaddingBottomRight: [16, 24] });
-      marker.on("click", () => {
-        if (rec) choose(rec, false);
-        if (rec && !window.matchMedia("(max-width: 720px)").matches) marker.openPopup();
-      });
+      if (rec) {
+        marker.bindPopup(popupHtml(rec), { maxWidth: 340, autoPanPaddingTopLeft: [16, 56], autoPanPaddingBottomRight: [16, 24] });
+        marker.on("click", () => {
+          choose(rec, false);
+          marker.openPopup();
+        });
+      }
       marker.addTo(layer);
     }
   }
@@ -521,6 +574,8 @@
     layer.clearLayers();
     layer.addTo(map);
     L.circleMarker([rec.lat, rec.lon], {
+      renderer: svgRenderer("selectPins", 660),
+      pane: "selectPins",
       radius: Math.max(8, activeRadius(rec.violActive || 1)),
       color: "#c96a4a",
       weight: 2,
@@ -731,7 +786,10 @@
       const rec = records().get(selectedRn);
       if (rec) paintCard(rec);
     }
-    if (selectedRn) showSelectPin(records().get(selectedRn));
+    const selected = selectedRn ? records().get(selectedRn) : null;
+    const queryText = queryEl && queryEl.value.trim();
+    if (selected && (queryText || onLayer(selected.rn))) showSelectPin(selected);
+    else if (!queryText) clearSelectPin();
   }
 
   window.__texmetricsAfterRender = afterRender;
