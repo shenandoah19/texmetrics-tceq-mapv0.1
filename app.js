@@ -227,7 +227,7 @@
 
   src = src.replace(
     "    document.getElementById(\"reportCta\").addEventListener(\"click\", showEarlyAccess);\n  }",
-    "    document.getElementById(\"reportCta\") && document.getElementById(\"reportCta\").addEventListener(\"click\", showEarlyAccess);\n    highlightRank(site);\n    const aside = document.querySelector(\"aside\");\n    const detailEl = document.getElementById(\"detail\");\n    if (aside && detailEl && aside.firstElementChild !== detailEl) aside.insertBefore(detailEl, aside.firstElementChild);\n  }"
+    "    document.getElementById(\"reportCta\") && document.getElementById(\"reportCta\").addEventListener(\"click\", showEarlyAccess);\n    highlightRank(site);\n    const aside = document.querySelector(\"aside\");\n    const detailEl = document.getElementById(\"detail\");\n    if (aside && detailEl && aside.firstElementChild !== detailEl) aside.insertBefore(detailEl, aside.firstElementChild);\n    if (window.__texmetricsPaintCard) window.__texmetricsPaintCard(site);\n  }"
   );
 
   src = src.replace(
@@ -370,6 +370,22 @@
       "      if (ready) ready.hidden = false;",
       "      document.getElementById(\"earlyAccessOpenPdf\")?.focus();",
     ].join("\n")
+  );
+
+  src = src.replace(
+    "    document.getElementById(\"viols\").innerHTML = `\n      <button class=\"chip${filters.hasActive ? \" on\" : \"\"}\" data-viol=\"hasActive\">Active violations</button>\n      <button class=\"chip${filters.hasRepeat ? \" on\" : \"\"}\" data-viol=\"hasRepeat\">Repeats</button>\n      <button class=\"chip${filters.hasMajor ? \" on\" : \"\"}\" data-viol=\"hasMajor\">Major</button>`;",
+    "    document.getElementById(\"viols\").innerHTML = \"\";"
+  );
+  if (src.includes("data-viol=\"hasActive\"")) {
+    throw new Error("violation chips were not removed");
+  }
+  src = src.replace(
+    "    drawChips();\n    bindChips();\n  }",
+    "    drawChips();\n    bindChips();\n    if (window.__texmetricsAfterRender) window.__texmetricsAfterRender();\n  }"
+  );
+  src = src.replace(
+    "  render();\n}\n\nmain().catch",
+    "  window.__texmetricsMapState = { filters: filters, payload: payload, map: map, layer: layer, markersByKey: markersByKey };\n  render();\n}\n\nmain().catch"
   );
 
   const script = document.createElement("script");
