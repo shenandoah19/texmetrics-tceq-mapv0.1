@@ -293,6 +293,8 @@ select, .chip, .year {
 .detail .row { display: grid; grid-template-columns: 96px 1fr; gap: 12px; font-size: 14px; }
 .detail dt { color: var(--subtle); }
 .amount { margin: 8px 0 0; font-family: var(--mono); font-size: 28px; color: var(--penalty); }
+.orders-through { margin: 4px 0 0; font-size: 12px; line-height: 1.4; color: var(--subtle); }
+.order-popup .orders-through { margin: 0; }
 .report-cta { margin-top: 16px; }
 .report-cta-button {
   display: block;

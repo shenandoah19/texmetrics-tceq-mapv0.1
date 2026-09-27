@@ -98,6 +98,13 @@
     '<ol class="order-list">${items}${more}</ol>\n  </div>`;',
     '${reportCtaHtml(site, "popup-cta")}\n    <ol class="order-list">${items}${more}</ol>\n  </div>`;'
   );
+  src = src.replace(
+    '<div><dt>Payable</dt><dd class="amount">${escapeHtml(money.format(site.payable))}</dd></div>',
+    '<div><dt>Payable</dt><dd class="amount">${escapeHtml(money.format(site.payable))}</dd></div>\n    ${window.__texmetricsOrdersThroughHtml ? window.__texmetricsOrdersThroughHtml() : ""}'
+  );
+  if (!src.includes("window.__texmetricsOrdersThroughHtml")) {
+    throw new Error("orders-through caption was not patched");
+  }
 
   src = src.replace("Top 10 customers", "Top 10 sites");
 
