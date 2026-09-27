@@ -128,6 +128,19 @@
     });
   }
 
+  function ordersThroughHtml() {
+    const orders = (state() && state().payload && state().payload.orders) || [];
+    let latest = "";
+    for (let i = 0; i < orders.length; i++) {
+      const date = toIso(orders[i].orderDate);
+      if (date && date > latest) latest = date;
+    }
+    if (!latest) return "";
+    return '<p class="orders-through">' + escapeHtml("Open Data orders through " + formatDate(latest) + ".") + "</p>";
+  }
+
+  window.__texmetricsOrdersThroughHtml = ordersThroughHtml;
+
   function plainProgram(program) {
     const text = String(program || "").trim().toLowerCase();
     if (!text) return "";
@@ -360,6 +373,7 @@
     el.innerHTML =
       "<h2>" + escapeHtml(rec.name) + "</h2>" +
       '<p class="amount">' + escapeHtml(hero) + "</p>" +
+      ordersThroughHtml() +
       '<p class="meta">' + escapeHtml(rec.violActive + " active · " + rec.violRepeat + " repeat") + "</p>" +
       (rating ? '<p class="meta">' + escapeHtml(rating) + "</p>" : "") +
       enforcementHtml(rec, 3) +
@@ -392,6 +406,7 @@
       (rec.customer && rec.customer !== rec.name ? '<p class="site">' + escapeHtml(rec.customer) + "</p>" : "") +
       "<dl>" +
       '<div><dt>Payable</dt><dd class="amount">' + escapeHtml(money.format(payable)) + "</dd></div>" +
+      ordersThroughHtml() +
       "<div><dt>Orders</dt><dd>" + orders.length + " at this RN</dd></div>" +
       "<div><dt>RN</dt><dd>" + escapeHtml(rec.rn) + "</dd></div>" +
       "<div><dt>Rating</dt><dd>" + escapeHtml(rating) + "</dd></div>" +
