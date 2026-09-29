@@ -231,10 +231,136 @@
     return { lat: null, lon: null, loc: null };
   }
 
+  function titleName(value) {
+    const text = String(value || "").trim();
+    if (!text) return "";
+    if (/^RN\d{9}$/i.test(text)) return text.toUpperCase();
+    const keep = { LLC: 1, LP: 1, INC: 1, CO: 1, US: 1, USA: 1, II: 1, III: 1, IV: 1, LTD: 1 };
+    return text.split(/(\s+)/).map((part) => {
+      if (!part || /^\s+$/.test(part)) return part;
+      return part.split("-").map((word) => {
+        const upper = word.toUpperCase();
+        if (keep[upper]) return upper;
+        if (/^RN\d+$/i.test(word)) return word.toUpperCase();
+        const lower = word.toLowerCase();
+        return lower.charAt(0).toUpperCase() + lower.slice(1);
+      }).join("-");
+    }).join("");
+  }
+
+  function allowSticky() {
+    [document.documentElement, document.body, document.getElementById("app")].forEach((node) => {
+      if (!node) return;
+      node.style.overflowX = "clip";
+      node.style.overflowY = "visible";
+    });
+  }
+
+  function fitCard(el) {
+    const box = el.getBoundingClientRect();
+    const top = box.top < 16 ? 16 : box.top;
+    el.style.maxHeight = Math.max(180, window.innerHeight - top - 12) + "px";
+  }
+
+  function keepCardOnScreen(el) {
+    if (!el) return;
+    allowSticky();
+    el.style.position = "sticky";
+    el.style.top = "16px";
+    el.style.overflowY = "auto";
+    el.style.zIndex = "3";
+    const title = el.querySelector("h2");
+    if (title) {
+      title.style.whiteSpace = "normal";
+      title.style.overflow = "visible";
+    }
+    fitCard(el);
+    if (!window.__texmetricsCardFit) {
+      window.__texmetricsCardFit = true;
+      const refit = () => {
+        const card = document.getElementById("detail");
+        if (card && card.dataset.texmetricsCard === "1") fitCard(card);
+      };
+      window.addEventListener("scroll", refit, { passive: true });
+      window.addEventListener("resize", refit);
+    }
+  }
+
+  function keepPopupOnScreen(popup) {
+    const map = (popup && popup._map) || window.__texmetricsMap;
+    if (!map || !popup || !popup.getElement) return;
+    const el = popup.getElement();
+    if (!el) return;
+    const title = el.querySelector("h3");
+    if (title) {
+      title.style.whiteSpace = "normal";
+      title.style.overflow = "visible";
+      title.style.textOverflow = "clip";
+    }
+    const mapRect = map.getContainer().getBoundingClientRect();
+    const room = Math.max(160, mapRect.height - 28);
+    const content = el.querySelector(".leaflet-popup-content");
+    if (content) {
+      content.style.maxHeight = room + "px";
+      content.style.overflowY = "auto";
+    }
+    const box = el.getBoundingClientRect();
+    if (box.width < 2 || box.height < 2) {
+      const waits = popup._texmetricsWait || 0;
+      if (waits < 8) {
+        popup._texmetricsWait = waits + 1;
+        requestAnimationFrame(() => keepPopupOnScreen(popup));
+      }
+      return;
+    }
+    const fitWidth = Math.max(180, Math.min(340, Math.floor(mapRect.width - 48)));
+    if (!popup._texmetricsWidthFit && fitWidth < (Number(popup.options.maxWidth) || 341)) {
+      popup._texmetricsWidthFit = true;
+      popup.options.maxWidth = fitWidth;
+      popup.update();
+      requestAnimationFrame(() => keepPopupOnScreen(popup));
+      return;
+    }
+    const pad = 12;
+    let dx = 0;
+    let dy = 0;
+    if (box.top < mapRect.top + pad) dy = -((mapRect.top + pad) - box.top);
+    else if (box.bottom > mapRect.bottom - pad && box.height <= room) dy = -(box.bottom - (mapRect.bottom - pad));
+    if (box.left < mapRect.left + pad) dx = -((mapRect.left + pad) - box.left);
+    else if (box.right > mapRect.right - pad) dx = -(box.right - (mapRect.right - pad));
+    const pans = popup._texmetricsPanCount || 0;
+    if ((dx || dy) && pans < 2) {
+      popup._texmetricsPanCount = pans + 1;
+      map.panBy([dx, dy], { animate: false });
+      requestAnimationFrame(() => keepPopupOnScreen(popup));
+      return;
+    }
+    if (box.top < mapRect.top + pad && !popup._texmetricsBelow) {
+      const height = el.offsetHeight || box.height || 220;
+      const offset = popup.options.offset || [0, 7];
+      const ox = Array.isArray(offset) ? Number(offset[0]) || 0 : Number(offset.x) || 0;
+      const oy = Array.isArray(offset) ? Number(offset[1]) || 0 : Number(offset.y) || 0;
+      popup._texmetricsBelow = true;
+      popup.options.offset = [ox, oy + height + 18];
+      popup.update();
+      requestAnimationFrame(() => keepPopupOnScreen(popup));
+    }
+  }
+  window.__texmetricsKeepPopupOnScreen = keepPopupOnScreen;
+
+  function watchPopups() {
+    const map = window.__texmetricsMap;
+    if (!map || map.__texmetricsPopupWatch) return;
+    map.__texmetricsPopupWatch = true;
+    map.on("popupopen", (event) => {
+      requestAnimationFrame(() => keepPopupOnScreen(event.popup));
+    });
+  }
+
   function buildRecord(rn, viol, orders) {
     const point = pointFor(viol, orders || []);
     const first = (orders && orders[0]) || {};
-    const name = (viol && viol.name) || first.siteName || first.reName || first.customer || rn;
+    const name = titleName((viol && viol.name) || first.siteName || first.reName || first.customer || rn);
     const county = (viol && viol.county) || first.county || "";
     const orderCounties = [];
     for (let i = 0; i < (orders || []).length; i++) {
@@ -243,7 +369,7 @@
     return {
       rn: rn,
       name: name,
-      customer: (viol && viol.customer) || first.customer || "",
+      customer: titleName((viol && viol.customer) || first.customer || ""),
       county: county,
       orderCounties: orderCounties,
       city: (viol && viol.city) || first.city || "",
@@ -396,6 +522,8 @@
       (identity ? '<p class="meta">' + escapeHtml(identity) + "</p>" : "") +
       where +
       '<div class="report-cta">' + reportHtml(rec.rn) + "</div>";
+    keepCardOnScreen(el);
+    el.scrollTop = 0;
     const btn = document.getElementById("reportCta");
     if (btn) {
       btn.addEventListener("click", () => {
@@ -840,6 +968,8 @@
       queryEl = document.getElementById("query");
       const ready = state() && queryEl && document.getElementById("viols") && document.getElementById("stats");
       if (ready) {
+        allowSticky();
+        watchPopups();
         ensureList();
         document.getElementById("viols").addEventListener("click", (event) => {
           const btn = event.target.closest("[data-mode]");
