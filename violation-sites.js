@@ -31,6 +31,9 @@
   const EMPTY_DETAIL =
     '<p class="kicker">Selected site</p><p class="meta" style="margin-top:8px">Click a pin to see every agreed order and violation count at that RN.</p>';
   const money = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
+  const PAID_LABEL = "Open Data paid (payable + SEP)";
+  const REPORT_NOTE = "The $129 report can include later Commission Issued Orders not in this file.";
+  let citationsThroughIso = "2025-10-21";
 
   let mode = "orders";
   window.__texmetricsMode = "orders";
@@ -316,16 +319,24 @@
     return hits;
   }
 
+  function citationsThroughText() {
+    return formatDate(citationsThroughIso || "2025-10-21");
+  }
+
+  function listedActive(count) {
+    return (Number(count) || 0).toLocaleString() + " listed as active in the citations extract through " + citationsThroughText() + ".";
+  }
+
   function figureText(rec) {
     const payable = inWindow(rec);
     if (payable > 0) return money.format(payable);
-    return rec.violActive + " active";
+    return listedActive(rec.violActive);
   }
 
   function violationsLine(rec) {
-    const bits = [rec.violActive + " active"];
+    const bits = [listedActive(rec.violActive)];
     if (rec.violRepeat) bits.push(rec.violRepeat + " repeat");
-    return bits.join(" · ");
+    return bits.join(" ");
   }
 
   function reportHtml(rn) {
@@ -360,21 +371,24 @@
     const rnLine = [rec.rn, county].filter(Boolean).join(" · ");
     const identity = identityLine(rec);
     const rating = ratingLabel(rec);
-    const hero = payable > 0 ? money.format(payable) : rec.violActive + " active";
     const where = rec.loc === "county"
       ? '<p class="meta">Plotted at the county center. Facility coordinates were not in the extract.</p>'
       : "";
     let penalty = "";
     if (outside) penalty = '<p class="meta">' + escapeHtml(money.format(rec.payableAll) + " outside the selected years.") + "</p>";
     else if (rec.payableAll <= 0) penalty = '<p class="meta">No agreed-order penalty in this extract.</p>';
+    const repeat = rec.violRepeat ? '<p class="meta">' + escapeHtml(rec.violRepeat + " repeat") + "</p>" : "";
     el.classList.remove("dash");
     el.dataset.siteRn = rec.rn;
     el.dataset.texmetricsCard = "1";
     el.innerHTML =
       "<h2>" + escapeHtml(rec.name) + "</h2>" +
-      '<p class="amount">' + escapeHtml(hero) + "</p>" +
+      '<p class="amount">' + escapeHtml(money.format(payable)) + "</p>" +
+      '<p class="meta">' + escapeHtml(PAID_LABEL) + "</p>" +
+      '<p class="meta">' + escapeHtml(REPORT_NOTE) + "</p>" +
       ordersThroughHtml() +
-      '<p class="meta">' + escapeHtml(rec.violActive + " active · " + rec.violRepeat + " repeat") + "</p>" +
+      '<p class="meta">' + escapeHtml(listedActive(rec.violActive)) + "</p>" +
+      repeat +
       (rating ? '<p class="meta">' + escapeHtml(rating) + "</p>" : "") +
       enforcementHtml(rec, 3) +
       penalty +
@@ -395,7 +409,7 @@
     const shown = orders.slice(0, 8);
     const items = shown.map((order) => "<li>" + escapeHtml(orderLine(order)) + "</li>").join("");
     const more = orders.length > 8 ? "<li>+" + (orders.length - 8) + " more agreed orders</li>" : "";
-    const payable = inWindow(rec) > 0 ? inWindow(rec) : rec.payableAll;
+    const payable = inWindow(rec);
     const place = [rec.address, rec.city, countyLabel(rec.county)].filter(Boolean).join(", ");
     const rating = ratingLabel(rec) || "Unclassified";
     const label = rec.rn === "RN100209931"
@@ -405,13 +419,13 @@
       '<div class="order-popup"><h3>' + escapeHtml(rec.name) + "</h3>" +
       (rec.customer && rec.customer !== rec.name ? '<p class="site">' + escapeHtml(rec.customer) + "</p>" : "") +
       "<dl>" +
-      '<div><dt>Payable</dt><dd class="amount">' + escapeHtml(money.format(payable)) + "</dd></div>" +
+      '<div><dt>' + escapeHtml(PAID_LABEL) + "</dt><dd class=\"amount\">" + escapeHtml(money.format(payable)) + "</dd></div>" +
       ordersThroughHtml() +
       "<div><dt>Orders</dt><dd>" + orders.length + " at this RN</dd></div>" +
       "<div><dt>RN</dt><dd>" + escapeHtml(rec.rn) + "</dd></div>" +
       "<div><dt>Rating</dt><dd>" + escapeHtml(rating) + "</dd></div>" +
       "<div><dt>Place</dt><dd>" + escapeHtml(place) + "</dd></div>" +
-      "<div><dt>Violations</dt><dd>" + escapeHtml(rec.violActive + " active · " + rec.violRepeat + " repeat") + "</dd></div>" +
+      "<div><dt>Violations</dt><dd>" + escapeHtml(violationsLine(rec)) + "</dd></div>" +
       "</dl>" +
       '<button type="button" class="report-cta-button popup-cta" data-rn="' + escapeHtml(rec.rn) + '">' + label + "</button>" +
       '<p class="cta-disclaimer">Public TCEQ compilation. Not a Phase I. Not a TCEQ company rating. Not legal advice.</p>' +
@@ -479,9 +493,7 @@
   }
 
   function payableTotal(rec) {
-    const viol = byRn.get(rec.rn);
-    if (viol && viol.payable != null && viol.payable !== "") return Number(viol.payable) || 0;
-    return rec.payableAll || 0;
+    return inWindow(rec);
   }
 
   function ordersInSpan(rec, filters) {
@@ -707,10 +719,10 @@
   function paintActiveChrome(rows) {
     const legend = legendEl();
     if (legend) {
-      legend.innerHTML = '<p class="kicker">One pin per site</p><p>Size = active violations. Not a fine.</p>';
+      legend.innerHTML = '<p class="kicker">One pin per site</p><p>' + escapeHtml("Size = listed as active in the citations extract through " + citationsThroughText() + ". Not a fine.") + "</p>";
     }
     const lede = document.querySelector("header .lede");
-    if (lede) lede.textContent = "Size = active violations. Not a fine.";
+    if (lede) lede.textContent = "Size = listed as active in the citations extract through " + citationsThroughText() + ". Not a fine.";
     let sitesN = 0;
     let activeN = 0;
     const counties = new Set();
@@ -723,15 +735,15 @@
     const stats = document.getElementById("stats");
     if (stats && !stats.hidden) {
       stats.innerHTML =
-        '<div class="stat"><dt>Sites with active violations</dt><dd>' + sitesN.toLocaleString() + "</dd><p>Active right now</p></div>" +
-        '<div class="stat"><dt>Active violations</dt><dd>' + activeN.toLocaleString() + "</dd><p>Not a payable total</p></div>" +
+        '<div class="stat"><dt>Sites</dt><dd>' + sitesN.toLocaleString() + "</dd><p>" + escapeHtml("Citations extract through " + citationsThroughText() + ".") + "</p></div>" +
+        '<div class="stat"><dt>Citations</dt><dd>' + escapeHtml(listedActive(activeN)) + "</dd><p>Not a fine.</p></div>" +
         '<div class="stat"><dt>Date span</dt><dd>' + escapeHtml(yearSpan(filters)) + "</dd><p>Selected range</p></div>" +
         '<div class="stat"><dt>Counties</dt><dd>' + counties.size.toLocaleString() + "</dd><p>Sites on this layer</p></div>";
     }
     const card = rankCard();
     if (!card || card.hidden) return;
     const kicker = document.getElementById("rankKicker");
-    if (kicker) kicker.textContent = "Ranked by active violations";
+    if (kicker) kicker.textContent = "Ranked by listed as active";
     const ranked = rows.slice().sort((a, b) => (Number(b.violActive) || 0) - (Number(a.violActive) || 0));
     const limit = Number(filters.topLimit) || 10;
     const top = ranked.slice(0, limit);
@@ -745,12 +757,12 @@
       const count = Number(site.violActive) || 0;
       return (
         '<li><button type="button" class="rank-row' + on + '" data-active-rn="' + escapeHtml(site.rn) + '">' +
-        '<div class="rank-top"><span>' + (i + 1) + " " + escapeHtml(site.name) + "</span><b>" + count.toLocaleString() + " active</b></div>" +
+        '<div class="rank-top"><span>' + (i + 1) + " " + escapeHtml(site.name) + "</span><b>" + escapeHtml(listedActive(count)) + "</b></div>" +
         '<div class="bar"><i style="width:' + Math.max(8, (count / max) * 100) + '%"></i></div>' +
         '<p class="meta">' + escapeHtml(site.rn) + " · " + escapeHtml(countyLabel(site.county)) + "</p>" +
         "</button></li>"
       );
-    }).join("") || '<p class="meta">No sites with active violations.</p>';
+    }).join("") || '<p class="meta">' + escapeHtml("None listed as active in the citations extract through " + citationsThroughText() + ".") + "</p>";
   }
 
   function paintToggle() {
@@ -759,7 +771,7 @@
     host.innerHTML =
       '<div class="mode-toggle" role="group" aria-label="Map layer">' +
       '<button type="button" data-mode="orders"' + (mode === "orders" ? ' class="on"' : "") + ">Agreed orders</button>" +
-      '<button type="button" data-mode="active"' + (mode === "active" ? ' class="on"' : "") + ">Active violations</button>" +
+      '<button type="button" data-mode="active"' + (mode === "active" ? ' class="on"' : "") + ">Listed as active</button>" +
       "</div>";
   }
 
@@ -881,6 +893,8 @@
       });
     }, Promise.reject());
     return chain.then((payload) => {
+      const through = payload && payload.meta && payload.meta.citationsThrough;
+      if (through) citationsThroughIso = String(through);
       const rows = Array.isArray(payload) ? payload : payload.sites || [];
       violationSites = rows.filter((site) => site && site.rn);
       byRn = new Map();

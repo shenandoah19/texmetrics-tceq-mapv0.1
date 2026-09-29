@@ -104,7 +104,11 @@
   );
   src = src.replace(
     '<div><dt>Payable</dt><dd class="amount">${escapeHtml(money.format(site.payable))}</dd></div>',
-    '<div><dt>Payable</dt><dd class="amount">${escapeHtml(money.format(site.payable))}</dd></div>\n    ${window.__texmetricsOrdersThroughHtml ? window.__texmetricsOrdersThroughHtml() : ""}'
+    '<div><dt>Open Data paid (payable + SEP)</dt><dd class="amount">${escapeHtml(money.format(site.payable))}</dd></div>\n    ${window.__texmetricsOrdersThroughHtml ? window.__texmetricsOrdersThroughHtml() : ""}'
+  );
+  src = src.replace(
+    "${money.format(site.payable)} · ${site.count} order",
+    "Open Data paid (payable + SEP) · ${money.format(site.payable)} · ${site.count} order"
   );
   if (!src.includes("window.__texmetricsOrdersThroughHtml")) {
     throw new Error("orders-through caption was not patched");
@@ -200,7 +204,8 @@
       "      <h2>${escapeHtml(title)}</h2>",
       "      ${customerLine}",
       "      <p class=\"amount\">${money.format(site.payable)}</p>",
-      "      <p class=\"meta\">Total payable · ${site.count} agreed order${site.count === 1 ? \"\" : \"s\"}</p>",
+      "      <p class=\"meta\">Open Data paid (payable + SEP)</p>",
+      "      <p class=\"meta\">The $129 report can include later Commission Issued Orders not in this file.</p>",
       "      <dl>",
       "        <div class=\"row\"><dt>RN</dt><dd>${rn ? escapeHtml(rn) : \"Not in source file\"}</dd></div>",
       "        <div class=\"row\"><dt>Rating</dt><dd>${escapeHtml(CLASS_LABEL[site.reClass] || \"Unclassified\")}</dd></div>",
