@@ -38,8 +38,7 @@
     "  }).join(\"\");",
     "}",
     "function siteLabel(site) {",
-    "  const raw = site.siteName && site.siteName !== site.customer ? site.siteName : (site.siteName || site.customer || site.rn || \"Unnamed site\");",
-    "  return titleName(raw);",
+    "  return site.siteName && site.siteName !== site.customer ? site.siteName : (site.siteName || site.customer || site.rn || \"Unnamed site\");",
     "}",
     "function siteKey(site) {",
     "  return (site.rn || \"\").trim().toUpperCase() || (\"GEO:\" + Number(site.lat).toFixed(5) + \",\" + Number(site.lon).toFixed(5));",
@@ -65,12 +64,16 @@
     "  orders.forEach(function (order) {",
     "    order.orderDate = toIsoDate(order.orderDate);",
     "    if (!order._openDataDollars) {",
-    "      order.payable = (Number(order.payable) || 0) + (Number(order.sep) || 0);",
+    "      order.openDataPaid = (Number(order.payable) || 0) + (Number(order.sep) || 0);",
+    "      order.payable = order.openDataPaid;",
     "      order._openDataDollars = 1;",
     "    }",
-    "    order.siteName = titleName(order.siteName);",
-    "    order.reName = titleName(order.reName);",
-    "    order.customer = titleName(order.customer);",
+    "    if (!order._nameCased) {",
+    "      order.siteName = titleName(order.siteName);",
+    "      order.reName = titleName(order.reName);",
+    "      order.customer = titleName(order.customer);",
+    "      order._nameCased = 1;",
+    "    }",
     "    if (order.orderDate && (!latest || order.orderDate > latest)) latest = order.orderDate;",
     "    if (order.orderDate && (!earliest || order.orderDate < earliest)) earliest = order.orderDate;",
     "  });",
@@ -134,6 +137,25 @@
   }
 
   src = src.replace("Top 10 customers", "Top 10 sites");
+  src = src.replace(
+    "payable: list.reduce((sum, order) => sum + order.payable, 0),",
+    "payable: list.reduce((sum, order) => sum + (order.openDataPaid != null ? order.openDataPaid : order.payable), 0),"
+  );
+  src = src.replace(
+    'if (filters.biz && (order.biz || "Unknown") !== filters.biz) return false;',
+    'if (filters.biz && (!window.__texmetricsNaicsCode || window.__texmetricsNaicsCode(order) !== filters.biz)) return false;'
+  );
+  src = src.replace(
+    '<div class="stat"><dt>Payable total</dt><dd>${compact.format(payable)}</dd><p>Cash due to TCEQ</p></div>',
+    '<div class="stat"><dt>Open Data paid</dt><dd>${compact.format(payable)}</dd><p>payable + SEP in the selected window</p></div>'
+  );
+  src = src.replace(
+    "<p>Size = total payable at site</p>",
+    "<p>Size = Open Data paid at site</p>"
+  );
+  if (!src.includes("openDataPaid != null") || !src.includes("__texmetricsNaicsCode") || !src.includes("Open Data paid</dt>") || !src.includes("Size = Open Data paid at site")) {
+    throw new Error("year or NAICS patch was not applied");
+  }
 
   src = src.replace(
     `<section class="card"><p class="kicker">Ranked by payable</p>
@@ -143,7 +165,7 @@
           <ol class="rank" id="rank"></ol></section>
         <section class="card detail dash" id="detail"></section>`,
     `<section class="card detail dash" id="detail"></section>
-        <section class="card"><p class="kicker">Ranked by payable</p>
+        <section class="card"><p class="kicker">Ranked by Open Data paid</p>
           <div class="rank-head"><h2 id="rankTitle">Top 10 sites</h2>
             <div class="chips tight" id="topLimit"></div>
           </div>
@@ -195,7 +217,7 @@
 
   src = src.replace(
     "      if (!mobile) marker.bindPopup(popupHtml(site), { maxWidth: 340, autoPanPadding: [24, 24] });",
-    "      if (!mobile) marker.bindPopup(popupHtml(site), window.__texmetricsPopupOptions());"
+    "      if (!mobile) marker.bindPopup(function () { return popupHtml(site); }, window.__texmetricsPopupOptions());"
   );
 
   src = src.replace(
@@ -449,8 +471,8 @@
     "`<li>${escapeHtml(formatDate(order.orderDate))} · ${escapeHtml(money.format(order.payable))} · ${escapeHtml(plainProgram(order.program))}</li>`"
   );
   src = src.replaceAll(
-    '<p class="kicker">Ranked by payable</p>',
-    '<p class="kicker" id="rankKicker">Ranked by payable</p>'
+    '<p class="kicker">Ranked by Open Data paid</p>',
+    '<p class="kicker" id="rankKicker">Ranked by Open Data paid</p>'
   );
   src = src.replace(
     "    document.getElementById(\"viols\").innerHTML = `\n      <button class=\"chip${filters.hasActive ? \" on\" : \"\"}\" data-viol=\"hasActive\">Active violations</button>\n      <button class=\"chip${filters.hasRepeat ? \" on\" : \"\"}\" data-viol=\"hasRepeat\">Repeats</button>\n      <button class=\"chip${filters.hasMajor ? \" on\" : \"\"}\" data-viol=\"hasMajor\">Major</button>`;",

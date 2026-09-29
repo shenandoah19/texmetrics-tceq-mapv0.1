@@ -131,7 +131,9 @@
     });
   }
 
+  let ordersThroughCached = "";
   function ordersThroughHtml() {
+    if (ordersThroughCached) return ordersThroughCached;
     const orders = (state() && state().payload && state().payload.orders) || [];
     let latest = "";
     for (let i = 0; i < orders.length; i++) {
@@ -139,7 +141,8 @@
       if (date && date > latest) latest = date;
     }
     if (!latest) return "";
-    return '<p class="orders-through">' + escapeHtml("Open Data orders through " + formatDate(latest) + ".") + "</p>";
+    ordersThroughCached = '<p class="orders-through">' + escapeHtml("Open Data orders through " + formatDate(latest) + ".") + "</p>";
+    return ordersThroughCached;
   }
 
   window.__texmetricsOrdersThroughHtml = ordersThroughHtml;
@@ -230,6 +233,46 @@
     }
     return { lat: null, lon: null, loc: null };
   }
+
+  const naicsLabels = new Map();
+  let sitesReady = false;
+
+  function parseNaics(value) {
+    const text = String(value || "").trim();
+    const match = text.match(/^(\d+)\s*[-–—]\s*(.+)$/);
+    if (!match) return null;
+    const code = match[1];
+    const desc = match[2].trim();
+    if (!code || !desc) return null;
+    return { code: code, desc: desc };
+  }
+
+  function installNaicsSelect() {
+    if (!sitesReady) return;
+    const select = document.getElementById("biz");
+    if (!select || select.dataset.naicsReady === "1") return;
+    const codes = Array.from(naicsLabels.keys()).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+    if (!codes.length) {
+      select.hidden = true;
+      select.dataset.naicsReady = "1";
+      return;
+    }
+    const options = ['<option value="">All NAICS</option>'];
+    for (let i = 0; i < codes.length; i++) {
+      const code = codes[i];
+      const label = code + " — " + naicsLabels.get(code);
+      options.push('<option value="' + escapeHtml(code) + '">' + escapeHtml(label) + "</option>");
+    }
+    select.innerHTML = options.join("");
+    select.setAttribute("aria-label", "NAICS");
+    select.dataset.naicsReady = "1";
+  }
+
+  window.__texmetricsNaicsCode = function (order) {
+    const rn = String((order && order.rn) || "").trim().toUpperCase();
+    const site = byRn.get(rn);
+    return (site && site.naicsCode) || "";
+  };
 
   function titleName(value) {
     const text = String(value || "").trim();
@@ -360,7 +403,7 @@
   function buildRecord(rn, viol, orders) {
     const point = pointFor(viol, orders || []);
     const first = (orders && orders[0]) || {};
-    const name = titleName((viol && viol.name) || first.siteName || first.reName || first.customer || rn);
+    const name = (viol && viol.name) || first.siteName || first.reName || first.customer || rn;
     const county = (viol && viol.county) || first.county || "";
     const orderCounties = [];
     for (let i = 0; i < (orders || []).length; i++) {
@@ -369,7 +412,8 @@
     return {
       rn: rn,
       name: name,
-      customer: titleName((viol && viol.customer) || first.customer || ""),
+      customer: (viol && viol.customer) || first.customer || "",
+      naicsCode: (viol && viol.naicsCode) || "",
       county: county,
       orderCounties: orderCounties,
       city: (viol && viol.city) || first.city || "",
@@ -649,11 +693,11 @@
     const orders = rec.orders || [];
     const ranged = ordersInSpan(rec, filters);
     if (orders.length && !ranged.length) return false;
-    if (filters.program || filters.reClass || filters.biz) {
+    if (filters.biz && (rec.naicsCode || "") !== filters.biz) return false;
+    if (filters.program || filters.reClass) {
       const hit = ranged.some((order) => {
         if (filters.program && order.program !== filters.program) return false;
         if (filters.reClass && (order.reClass || "UNCLASSIFIED") !== filters.reClass) return false;
-        if (filters.biz && (order.biz || "Unknown") !== filters.biz) return false;
         return true;
       });
       if (!hit) return false;
@@ -835,11 +879,11 @@
   function restoreAgreedChrome() {
     const legend = legendEl();
     if (legend) {
-      legend.innerHTML = '<p class="kicker">One pin per RN</p><p>Size = total payable at site</p><p>Glow = $100k+ · ring = rating</p>';
+      legend.innerHTML = '<p class="kicker">One pin per RN</p><p>Size = Open Data paid at site</p><p>Glow = $100k+ · ring = rating</p>';
     }
     const card = rankCard();
     const kicker = document.getElementById("rankKicker");
-    if (kicker) kicker.textContent = "Ranked by payable";
+    if (kicker) kicker.textContent = "Ranked by Open Data paid";
     const lede = document.querySelector("header .lede");
     if (lede) lede.textContent = "One pin per facility RN. Size is total payable at that site. Glow marks $100,000 or more. Ring color is compliance rating.";
   }
@@ -969,6 +1013,7 @@
       const ready = state() && queryEl && document.getElementById("viols") && document.getElementById("stats");
       if (ready) {
         allowSticky();
+        installNaicsSelect();
         watchPopups();
         ensureList();
         document.getElementById("viols").addEventListener("click", (event) => {
@@ -1030,9 +1075,16 @@
       byRn = new Map();
       violationSites.forEach((site) => {
         site.rn = String(site.rn).trim().toUpperCase();
+        site.name = titleName(site.name);
+        site.customer = titleName(site.customer);
+        const parsed = parseNaics(site.naics);
+        site.naicsCode = parsed ? parsed.code : "";
+        if (parsed && !naicsLabels.has(parsed.code)) naicsLabels.set(parsed.code, parsed.desc);
         if (!Array.isArray(site.programs)) site.programs = [];
         byRn.set(site.rn, site);
       });
+      sitesReady = true;
+      installNaicsSelect();
       if (mode === "active") afterRender();
       syncSearch();
     });
