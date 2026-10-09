@@ -510,9 +510,7 @@
   }
 
   function reportHtml(rn) {
-    const label = rn === "RN100209931"
-      ? "Get the TexMetrics report for this site"
-      : "Get the TexMetrics report for this site · $129";
+    const label = "Get the TexMetrics report for this site · $129";
     return (
       '<button type="button" class="report-cta-button" id="reportCta" data-rn="' +
       escapeHtml(rn) +
@@ -584,9 +582,7 @@
     const payable = inWindow(rec);
     const place = [rec.address, rec.city, countyLabel(rec.county)].filter(Boolean).join(", ");
     const rating = ratingLabel(rec) || "Unclassified";
-    const label = rec.rn === "RN100209931"
-      ? "Get the TexMetrics report for this site"
-      : "Get the TexMetrics report for this site · $129";
+    const label = "Get the TexMetrics report for this site · $129";
     return (
       '<div class="order-popup"><h3>' + escapeHtml(rec.name) + "</h3>" +
       (rec.customer && rec.customer !== rec.name ? '<p class="site">' + escapeHtml(rec.customer) + "</p>" : "") +
