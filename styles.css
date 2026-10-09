@@ -119,6 +119,7 @@ h1 {
 .search-row {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 8px;
 }
 .search {
@@ -127,11 +128,20 @@ h1 {
 }
 .search input {
   width: 100%;
-  height: 40px;
-  border: 1px solid var(--border);
+  height: 44px;
+  border: 1.5px solid #C96A4A;
   background: var(--surface);
-  border-radius: 8px;
+  border-radius: 10px;
   padding: 0 12px 0 36px;
+}
+.search input::placeholder {
+  color: var(--muted);
+  opacity: 1;
+}
+.search input:focus {
+  outline: none;
+  border-width: 2px;
+  box-shadow: 0 0 0 3px rgba(201, 106, 74, 0.35);
 }
 .search svg {
   position: absolute;
@@ -140,7 +150,7 @@ h1 {
   width: 16px;
   height: 16px;
   transform: translateY(-50%);
-  color: var(--subtle);
+  color: #C96A4A;
 }
 .selects {
   display: grid;
@@ -212,7 +222,6 @@ select, .chip, .year {
   .stats { margin: 10px 0 10px; gap: 8px; }
   .stat { padding: 8px; }
   .stat dd { font-size: 15px; }
-  .search-row { display: grid; }
   .selects { width: 100%; }
   .selects.extra { width: 100%; }
   .mast { align-items: center; }
@@ -491,31 +500,33 @@ select, .chip, .year {
 .order-popup dt { color: var(--subtle); }
 .order-popup dd { margin: 0; }
 .order-popup .amount { font-size: 13px; }
-/* Phone: hide chrome, collapse filters, taller map */
-.filter-fold > summary { display: none; }
-@media (min-width: 721px) {
-  .filter-fold { display: contents; }
-}
+/* Phone: search stays open. Filters reveals the other controls. */
+.filter-toggle { display: none; }
+.filter-more { display: contents; }
 @media (max-width: 720px) {
   .legend, .shield { display: none !important; }
   .map-wrap, .embed .map-wrap {
     height: min(62dvh, 520px) !important;
     min-height: 300px;
   }
-  .filter-fold > summary {
-    display: block !important;
-    list-style: none;
+  .search-row { display: contents; }
+  .search { order: 1; }
+  .viol-hits { order: 2; }
+  .filter-toggle {
+    order: 3;
+    display: block;
+    width: 100%;
     height: 40px;
-    line-height: 40px;
-    padding: 0 14px;
-    margin-bottom: 10px;
     border: 1px solid var(--border);
     border-radius: 999px;
     background: var(--surface);
     font-size: 14px;
     font-weight: 600;
   }
-  .filter-fold > summary::-webkit-details-marker { display: none; }
+  .search-row .selects { order: 4; display: none; }
+  .filter-more { order: 5; display: none; }
+  .filters.is-open .search-row .selects { display: grid; }
+  .filters.is-open .filter-more { display: grid; gap: 12px; }
   .leaflet-control-zoom { margin-top: 8px !important; margin-right: 8px !important; }
 .leaflet-popup-content {
   margin: 12px 14px;

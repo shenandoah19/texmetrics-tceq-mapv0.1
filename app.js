@@ -504,6 +504,39 @@
     "  window.__texmetricsMapState = { filters: filters, payload: payload, map: map, layer: layer, markersByKey: markersByKey, render: render };\n  render();\n}\n\nmain().catch"
   );
 
+  const foldHead = "        <details class=\"filter-fold\" id=\"filterFold\">\n          <summary>Filters & search</summary>\n";
+  const extraOpen = "        </div>\n        <div class=\"selects extra\">";
+  const foldClose = "        <div class=\"chips\" id=\"viols\"></div>\n        </details>";
+  const foldOpenLine = "  if (!mobile || urlQuery) document.getElementById(\"filterFold\").open = true;";
+  const foldQueryOpen = "    document.getElementById(\"filterFold\").open = true;\n";
+  if (!src.includes(foldHead) || !src.includes(extraOpen) || !src.includes(foldClose) || !src.includes(foldOpenLine) || !src.includes(foldQueryOpen)) {
+    throw new Error("filter fold markup was not found");
+  }
+  src = src.replace(foldHead, "");
+  src = src.replace(
+    extraOpen,
+    "        </div>\n        <button type=\"button\" class=\"filter-toggle\" id=\"filterToggle\" aria-expanded=\"false\">Filters</button>\n        <div class=\"filter-more\" id=\"filterMore\">\n        <div class=\"selects extra\">"
+  );
+  src = src.replace(foldClose, "        <div class=\"chips\" id=\"viols\"></div>\n        </div>");
+  src = src.replace(
+    foldOpenLine,
+    [
+      "  (function () {",
+      "    var toggle = document.getElementById(\"filterToggle\");",
+      "    var box = document.querySelector(\".filters\");",
+      "    if (!toggle || !box) return;",
+      "    toggle.addEventListener(\"click\", function () {",
+      "      var open = box.classList.toggle(\"is-open\");",
+      "      toggle.setAttribute(\"aria-expanded\", open ? \"true\" : \"false\");",
+      "    });",
+      "  })();",
+    ].join("\n")
+  );
+  src = src.replace(foldQueryOpen, "");
+  if (src.includes("filterFold") || src.includes("Filters & search")) {
+    throw new Error("old filter button was not removed");
+  }
+
   const script = document.createElement("script");
   script.textContent = src;
   document.body.appendChild(script);
