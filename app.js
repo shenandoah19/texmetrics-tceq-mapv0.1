@@ -342,6 +342,7 @@
       "    }",
       "    const buttons = document.querySelectorAll('.report-cta-button[data-rn=\"' + rn + '\"]');",
       "    buttons.forEach((btn) => { btn.disabled = true; });",
+      "    // Body is the RN only. No price id and no success URL. Railway opens Checkout.",
       "    fetch(\"https://texmetrics-pdf-private-production.up.railway.app/checkout\", {",
       "      method: \"POST\",",
       "      headers: { \"Content-Type\": \"application/json\", Accept: \"application/json\" },",
