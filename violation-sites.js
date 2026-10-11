@@ -577,6 +577,7 @@
     if (btn) {
       btn.addEventListener("click", () => {
         if (typeof window.__texmetricsOpenReport === "function") window.__texmetricsOpenReport(rec.rn);
+        else btn.textContent = "Report unavailable";
       });
     }
   }

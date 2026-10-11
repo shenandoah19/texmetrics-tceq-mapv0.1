@@ -9,6 +9,13 @@
     return;
   }
   let src = await res.text();
+  const missedPatches = [];
+  function patched(name, token) {
+    if (!src.includes(token)) {
+      missedPatches.push(name);
+      console.error("TexMetrics: required replacement did not match: " + name);
+    }
+  }
 
   src = src.replaceAll(
     "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
@@ -102,6 +109,7 @@
     /function topCustomers\(orders, limit = 5\) \{[\s\S]*?return \[\.\.\.map\.values\(\)\]\.sort\(\(a, b\) => b\.total - a\.total\)\.slice\(0, limit\);\n\}/,
     helpers
   );
+  patched("Get-report button markup", "function reportCtaHtml");
 
   src = src.replace(
     "const items = site.orders.slice(0, 8).map((order) =>",
@@ -121,6 +129,7 @@
     '<ol class="order-list">${items}${more}</ol>\n  </div>`;',
     '${reportCtaHtml(site, "popup-cta")}\n    <ol class="order-list">${items}${more}</ol>\n  </div>`;'
   );
+  patched("popup Get-report button", "reportCtaHtml(site, \"popup-cta\")");
   src = src.replace(
     '<div><dt>Payable</dt><dd class="amount">${escapeHtml(money.format(site.payable))}</dd></div>',
     '<div><dt>Open Data paid (payable + SEP)</dt><dd class="amount">${escapeHtml(money.format(site.payable))}</dd></div>\n    ${window.__texmetricsOrdersThroughHtml ? window.__texmetricsOrdersThroughHtml() : ""}'
@@ -269,9 +278,7 @@
     "Request compliance report for this RN",
     "Get the TexMetrics report for this site"
   );
-  if (!src.includes("${reportCtaHtml(site)}")) {
-    throw new Error("selected-card CTA was not patched");
-  }
+  patched("selected-card Get-report button", "${reportCtaHtml(site)}");
 
   src = src.replace("site.orders.slice(0, 12)", "site.orders.slice(0, 3)");
 
@@ -312,8 +319,9 @@
 
   src = src.replace(
     "    document.getElementById(\"reportCta\").addEventListener(\"click\", showEarlyAccess);\n  }",
-    "    const reportBtn = document.getElementById(\"reportCta\");\n    if (reportBtn) reportBtn.addEventListener(\"click\", () => openReportCta(reportBtn.getAttribute(\"data-rn\")));\n    highlightRank(site);\n    const aside = document.querySelector(\"aside\");\n    const detailEl = document.getElementById(\"detail\");\n    if (aside && detailEl && aside.firstElementChild !== detailEl) aside.insertBefore(detailEl, aside.firstElementChild);\n    if (window.__texmetricsPaintCard) window.__texmetricsPaintCard(site);\n  }"
+    "    const reportBtn = document.getElementById(\"reportCta\");\n    if (reportBtn) reportBtn.addEventListener(\"click\", () => {\n      if (typeof window.__texmetricsOpenReport === \"function\") window.__texmetricsOpenReport(reportBtn.getAttribute(\"data-rn\"));\n      else reportBtn.textContent = \"Report unavailable\";\n    });\n    highlightRank(site);\n    const aside = document.querySelector(\"aside\");\n    const detailEl = document.getElementById(\"detail\");\n    if (aside && detailEl && aside.firstElementChild !== detailEl) aside.insertBefore(detailEl, aside.firstElementChild);\n    if (window.__texmetricsPaintCard) window.__texmetricsPaintCard(site);\n  }"
   );
+  patched("Get-report click", "reportBtn.textContent = \"Report unavailable\"");
 
   src = src.replace(
     "    document.querySelectorAll(\"#rank [data-customer]\").forEach((btn) => {\n      btn.addEventListener(\"click\", () => {\n        filters.customer = filters.customer === btn.dataset.customer ? \"\" : btn.dataset.customer;\n        render();\n      });\n    });\n  }",
@@ -377,6 +385,7 @@
       "  });",
     ].join("\n")
   );
+  patched("Stripe checkout URL", "https://texmetrics-pdf-private-production.up.railway.app/checkout");
 
   src = src.replace(
     "  async function generateReport(e) {\n    e.preventDefault();",
@@ -384,12 +393,12 @@
   );
   src = src.replace(
     "  function showEarlyAccess() {\n    let overlay = document.getElementById(\"earlyAccess\");",
-    "  function showEarlyAccess() {\n    openReportCta(selectedRn());\n    return;\n    let overlay = document.getElementById(\"earlyAccess\");"
+    "  function showEarlyAccess() {\n    if (typeof openReportCta === \"function\") openReportCta(selectedRn());\n    else { const btn = document.getElementById(\"reportCta\"); if (btn) btn.textContent = \"Report unavailable\"; }\n    return;\n    let overlay = document.getElementById(\"earlyAccess\");"
   );
   if (!src.includes("async function generateReport(e) {\n    e.preventDefault();\n    return;")) {
     throw new Error("password submit was not disabled");
   }
-  if (!src.includes("function showEarlyAccess() {\n    openReportCta(selectedRn());\n    return;")) {
+  if (!src.includes("function showEarlyAccess() {\n    if (typeof openReportCta === \"function\") openReportCta(selectedRn());")) {
     throw new Error("password modal was not disabled");
   }
   if (src.includes('addEventListener("click", showEarlyAccess)')) {
@@ -456,6 +465,22 @@
   src = src.replace(foldQueryOpen, "");
   if (src.includes("filterFold") || src.includes("Filters & search")) {
     throw new Error("old filter button was not removed");
+  }
+  if (missedPatches.length) {
+    src += [
+      "",
+      "window.__texmetricsOpenReport = window.__texmetricsOpenReport || function () {",
+      "  document.querySelectorAll(\".report-cta-button\").forEach(function (btn) {",
+      "    btn.disabled = false;",
+      "    btn.textContent = \"Report unavailable\";",
+      "  });",
+      "};",
+      "if (typeof reportCtaHtml !== \"function\") {",
+      "  function reportCtaHtml() {",
+      "    return '<button type=\"button\" class=\"report-cta-button\" id=\"reportCta\">Report unavailable</button>';",
+      "  }",
+      "}",
+    ].join("\n");
   }
 
   const script = document.createElement("script");
