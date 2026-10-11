@@ -33,6 +33,7 @@
   const money = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
   const PAID_LABEL = "Open Data paid (payable + SEP)";
   const REPORT_NOTE = "The $129 report can include later Commission Issued Orders not in this file.";
+  const SAMPLE_RN = "RN100209931";
   let citationsThroughIso = "2025-10-21";
 
   let mode = "orders";
@@ -509,8 +510,13 @@
     return bits.join(" ");
   }
 
+  function reportLabel(rn) {
+    if (String(rn || "").trim().toUpperCase() === SAMPLE_RN) return "Get the TexMetrics report for this site";
+    return "Get the TexMetrics report for this site · $129";
+  }
+
   function reportHtml(rn) {
-    const label = "Get the TexMetrics report for this site · $129";
+    const label = reportLabel(rn);
     return (
       '<button type="button" class="report-cta-button" id="reportCta" data-rn="' +
       escapeHtml(rn) +
@@ -534,6 +540,7 @@
     const el = document.getElementById("detail");
     if (!el || !rec) return;
     const payable = inWindow(rec);
+    const sample = String(rec.rn || "").trim().toUpperCase() === SAMPLE_RN;
     const outside = payable <= 0 && rec.payableAll > 0;
     const county = countyLabel(rec.county);
     const rnLine = [rec.rn, county].filter(Boolean).join(" · ");
@@ -553,7 +560,7 @@
       "<h2>" + escapeHtml(rec.name) + "</h2>" +
       '<p class="amount">' + escapeHtml(money.format(payable)) + "</p>" +
       '<p class="meta">' + escapeHtml(PAID_LABEL) + "</p>" +
-      '<p class="meta">' + escapeHtml(REPORT_NOTE) + "</p>" +
+      (sample ? "" : '<p class="meta">' + escapeHtml(REPORT_NOTE) + "</p>") +
       ordersThroughHtml() +
       '<p class="meta">' + escapeHtml(listedActive(rec.violActive)) + "</p>" +
       repeat +
@@ -582,7 +589,7 @@
     const payable = inWindow(rec);
     const place = [rec.address, rec.city, countyLabel(rec.county)].filter(Boolean).join(", ");
     const rating = ratingLabel(rec) || "Unclassified";
-    const label = "Get the TexMetrics report for this site · $129";
+    const label = reportLabel(rec.rn);
     return (
       '<div class="order-popup"><h3>' + escapeHtml(rec.name) + "</h3>" +
       (rec.customer && rec.customer !== rec.name ? '<p class="site">' + escapeHtml(rec.customer) + "</p>" : "") +

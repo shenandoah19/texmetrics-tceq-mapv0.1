@@ -91,7 +91,7 @@
     "function reportCtaHtml(site, extraClass) {",
     "  const rn = (site.rn || \"\").trim().toUpperCase();",
     "  if (!rn) return '<p class=\"meta\">No RN in the source file \u2014 report not available.</p>';",
-    "  const label = \"Get the TexMetrics report for this site \\u00b7 $129\";",
+    "  const label = rn === \"RN100209931\" ? \"Get the TexMetrics report for this site\" : \"Get the TexMetrics report for this site \\u00b7 $129\";",
     "  const idAttr = extraClass ? \"\" : \" id=\\\"reportCta\\\"\";",
     "  return '<button type=\"button\" class=\"report-cta-button ' + (extraClass || \"\") + '\"' + idAttr + ' data-rn=\"' + escapeHtml(rn) + '\">' + label + '</button>' +",
     "    '<p class=\"cta-disclaimer\">Public TCEQ compilation. Not a Phase I. Not a TCEQ company rating. Not legal advice.</p>';",
@@ -243,7 +243,7 @@
       "      ${customerLine}",
       "      <p class=\"amount\">${money.format(site.payable)}</p>",
       "      <p class=\"meta\">Open Data paid (payable + SEP)</p>",
-      "      <p class=\"meta\">The $129 report can include later Commission Issued Orders not in this file.</p>",
+      "      ${rn === \"RN100209931\" ? \"\" : \"<p class=\\\"meta\\\">The $129 report can include later Commission Issued Orders not in this file.</p>\"}",
       "      <dl>",
       "        <div class=\"row\"><dt>RN</dt><dd>${rn ? escapeHtml(rn) : \"Not in source file\"}</dd></div>",
       "        <div class=\"row\"><dt>Rating</dt><dd>${escapeHtml(CLASS_LABEL[site.reClass] || \"Unclassified\")}</dd></div>",
@@ -312,7 +312,7 @@
 
   src = src.replace(
     "    document.getElementById(\"reportCta\").addEventListener(\"click\", showEarlyAccess);\n  }",
-    "    document.getElementById(\"reportCta\") && document.getElementById(\"reportCta\").addEventListener(\"click\", showEarlyAccess);\n    highlightRank(site);\n    const aside = document.querySelector(\"aside\");\n    const detailEl = document.getElementById(\"detail\");\n    if (aside && detailEl && aside.firstElementChild !== detailEl) aside.insertBefore(detailEl, aside.firstElementChild);\n    if (window.__texmetricsPaintCard) window.__texmetricsPaintCard(site);\n  }"
+    "    const reportBtn = document.getElementById(\"reportCta\");\n    if (reportBtn) reportBtn.addEventListener(\"click\", () => openReportCta(reportBtn.getAttribute(\"data-rn\")));\n    highlightRank(site);\n    const aside = document.querySelector(\"aside\");\n    const detailEl = document.getElementById(\"detail\");\n    if (aside && detailEl && aside.firstElementChild !== detailEl) aside.insertBefore(detailEl, aside.firstElementChild);\n    if (window.__texmetricsPaintCard) window.__texmetricsPaintCard(site);\n  }"
   );
 
   src = src.replace(
@@ -328,6 +328,10 @@
       "  function openReportCta(rn) {",
       "    rn = String(rn || \"\").trim().toUpperCase();",
       "    if (!rn) return;",
+      "    if (rn === \"RN100209931\") {",
+      "      window.open(\"./TexMetrics_RN100209931_Compliance_Report.pdf\", \"_blank\", \"noopener\");",
+      "      return;",
+      "    }",
       "    const buttons = document.querySelectorAll('.report-cta-button[data-rn=\"' + rn + '\"]');",
       "    buttons.forEach((btn) => { btn.disabled = true; });",
       "    fetch(\"https://texmetrics-pdf-private-production.up.railway.app/checkout\", {",
@@ -375,105 +379,22 @@
   );
 
   src = src.replace(
-    "          <p class=\"modal-lead\">Enter the early-access password to generate the compliance report.</p>",
-    "          <p class=\"modal-lead\">Enter the early-access password to generate the compliance report. The PDF will open in a new tab and download.</p>"
+    "  async function generateReport(e) {\n    e.preventDefault();",
+    "  async function generateReport(e) {\n    e.preventDefault();\n    return;"
   );
-
   src = src.replace(
-    "            </div>\n          </form>\n        </div>`;",
-    [
-      "            </div>",
-      "          </form>",
-      "          <div class=\"modal-ready\" id=\"earlyAccessReady\" hidden>",
-      "            <p class=\"modal-ready-file\" id=\"earlyAccessReadyFile\"></p>",
-      "            <div class=\"modal-actions modal-ready-actions\">",
-      "              <button type=\"button\" class=\"modal-submit\" id=\"earlyAccessOpenPdf\">Open PDF</button>",
-      "              <button type=\"button\" class=\"modal-cancel\" id=\"earlyAccessDownloadPdf\">Download PDF</button>",
-      "            </div>",
-      "            <button type=\"button\" class=\"modal-close-link\" id=\"earlyAccessDone\">Close</button>",
-      "          </div>",
-      "        </div>`;",
-    ].join("\n")
+    "  function showEarlyAccess() {\n    let overlay = document.getElementById(\"earlyAccess\");",
+    "  function showEarlyAccess() {\n    openReportCta(selectedRn());\n    return;\n    let overlay = document.getElementById(\"earlyAccess\");"
   );
-
-  src = src.replace(
-    "      overlay.querySelector(\"#earlyAccessCancel\").addEventListener(\"click\", hideEarlyAccess);\n      overlay.querySelector(\"#earlyAccessForm\").addEventListener(\"submit\", generateReport);\n      document.body.appendChild(overlay);",
-    [
-      "      overlay.querySelector(\"#earlyAccessCancel\").addEventListener(\"click\", hideEarlyAccess);",
-      "      overlay.querySelector(\"#earlyAccessForm\").addEventListener(\"submit\", generateReport);",
-      "      overlay.querySelector(\"#earlyAccessDone\").addEventListener(\"click\", hideEarlyAccess);",
-      "      overlay.querySelector(\"#earlyAccessOpenPdf\").addEventListener(\"click\", () => {",
-      "        if (window.__texmetricsPdfUrl) window.open(window.__texmetricsPdfUrl, \"_blank\", \"noopener\");",
-      "      });",
-      "      overlay.querySelector(\"#earlyAccessDownloadPdf\").addEventListener(\"click\", () => {",
-      "        if (!window.__texmetricsPdfUrl) return;",
-      "        const a = document.createElement(\"a\");",
-      "        a.href = window.__texmetricsPdfUrl;",
-      "        a.download = window.__texmetricsPdfName || \"TexMetrics_Compliance_Report.pdf\";",
-      "        a.rel = \"noopener\";",
-      "        document.body.appendChild(a);",
-      "        a.click();",
-      "        a.remove();",
-      "      });",
-      "      document.body.appendChild(overlay);",
-    ].join("\n")
-  );
-
-  src = src.replace(
-    "    setReportBusy(false);\n    setReportError(\"\");\n    overlay.classList.add(\"open\");",
-    [
-      "    setReportBusy(false);",
-      "    setReportError(\"\");",
-      "    const form = overlay.querySelector(\"#earlyAccessForm\");",
-      "    const ready = overlay.querySelector(\"#earlyAccessReady\");",
-      "    const title = overlay.querySelector(\"#earlyAccessTitle\");",
-      "    const lead = overlay.querySelector(\".modal-lead\");",
-      "    if (form) form.hidden = false;",
-      "    if (ready) ready.hidden = true;",
-      "    if (title) title.textContent = \"Early Access\";",
-      "    if (lead) lead.textContent = \"Enter the early-access password to generate the compliance report. The PDF will open in a new tab and download.\";",
-      "    overlay.classList.add(\"open\");",
-    ].join("\n")
-  );
-
-  src = src.replace(
-    "      const url = URL.createObjectURL(blob);\n      const a = document.createElement(\"a\");\n      a.href = url;\n      a.download = `TexMetrics_${rn}_Compliance_Report.pdf`;\n      a.rel = \"noopener\";\n      document.body.appendChild(a);\n      a.click();\n      a.remove();\n      setTimeout(() => URL.revokeObjectURL(url), 1500);\n      hideEarlyAccess();",
-    [
-      "      if (window.__texmetricsPdfUrl) {",
-      "        try { URL.revokeObjectURL(window.__texmetricsPdfUrl); } catch (_) {}",
-      "      }",
-      "      const url = URL.createObjectURL(blob);",
-      "      const fileName = `TexMetrics_${rn}_Compliance_Report.pdf`;",
-      "      window.__texmetricsPdfUrl = url;",
-      "      window.__texmetricsPdfName = fileName;",
-      "      try {",
-      "        const a = document.createElement(\"a\");",
-      "        a.href = url;",
-      "        a.download = fileName;",
-      "        a.rel = \"noopener\";",
-      "        a.target = \"_blank\";",
-      "        document.body.appendChild(a);",
-      "        a.click();",
-      "        a.remove();",
-      "      } catch (_) {}",
-      "      const opened = window.open(url, \"_blank\", \"noopener\");",
-      "      setReportBusy(false);",
-      "      const overlay = document.getElementById(\"earlyAccess\");",
-      "      const form = document.getElementById(\"earlyAccessForm\");",
-      "      const ready = document.getElementById(\"earlyAccessReady\");",
-      "      const title = document.getElementById(\"earlyAccessTitle\");",
-      "      const lead = overlay && overlay.querySelector(\".modal-lead\");",
-      "      const fileEl = document.getElementById(\"earlyAccessReadyFile\");",
-      "      if (title) title.textContent = \"Report ready\";",
-      "      if (lead) lead.textContent = opened",
-      "        ? \"The PDF opened in a new tab and started downloading. If you do not see it, use the buttons below.\"",
-      "        : \"Your browser held the new tab. Open the PDF here so you can see the file.\";",
-      "      if (fileEl) fileEl.textContent = fileName;",
-      "      if (form) form.hidden = true;",
-      "      if (ready) ready.hidden = false;",
-      "      document.getElementById(\"earlyAccessOpenPdf\")?.focus();",
-    ].join("\n")
-  );
+  if (!src.includes("async function generateReport(e) {\n    e.preventDefault();\n    return;")) {
+    throw new Error("password submit was not disabled");
+  }
+  if (!src.includes("function showEarlyAccess() {\n    openReportCta(selectedRn());\n    return;")) {
+    throw new Error("password modal was not disabled");
+  }
+  if (src.includes('addEventListener("click", showEarlyAccess)')) {
+    throw new Error("password button was not removed");
+  }
 
   src = src.replace(
     "  const payload = await loadOrders();",
