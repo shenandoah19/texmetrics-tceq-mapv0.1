@@ -1,12 +1,18 @@
-"""Rebuild tceq-orders.json from the TCEQ agreed-orders extract.
+"""Rebuild tceq-orders.json from TCEQ Open Data plus newer Commission Issued Orders.
 
-Same Open Data file the map already uses:
+Open Data file the map already uses:
 https://data.texas.gov/api/views/u66a-qggj/rows.csv?accessType=DOWNLOAD
 
-RN comes from the NOE docket join the map already uses
+RN for those rows comes from the NOE docket join the map already uses
 (https://data.texas.gov/api/views/rua3-iswk/rows.csv?accessType=DOWNLOAD).
-An RN already on the map keeps its pin. This does not change search,
-the popup, or the report button.
+An order already on the map keeps its pin.
+
+AIR-E orders newer than that extract come from one CIO date search:
+https://www14.tceq.texas.gov/epic/CIO/index.cfm?fuseaction=search.searchByDate
+FromDate is the newest Open Data order date minus 60 days. ToDate is today.
+A docket in both sources keeps the Open Data row. A new CIO row uses the
+NOE facility coordinate for its RN, then that county's existing center.
+This does not change search, the popup, or the report button.
 
 From this folder, weekly or whenever:
 
@@ -19,17 +25,24 @@ import csv
 import json
 import re
 import tempfile
+import urllib.parse
 import urllib.request
 from collections import Counter, defaultdict
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 OUT = ROOT / "tceq-orders.json"
 ORDERS_URL = "https://data.texas.gov/api/views/u66a-qggj/rows.csv?accessType=DOWNLOAD"
 NOES_URL = "https://data.texas.gov/api/views/rua3-iswk/rows.csv?accessType=DOWNLOAD"
+CIO_DATE_URL = "https://www14.tceq.texas.gov/epic/CIO/index.cfm?fuseaction=search.searchByDate"
+CIO_PDF_URL = (
+    "https://www14.tceq.texas.gov/epic/CIO/index.cfm"
+    "?fuseaction=search.download&agy_dkt_num_txt={docket}"
+)
 DOCKET_RE = re.compile(r"\d{4}-\d{4}-[A-Z]{2,5}-E", re.IGNORECASE)
 MIN_MAPPED = 500
+CIO_LOOKBACK_DAYS = 60
 
 ORDER_DOCKET = ["TCEQ Docket No.", "TCEQ Docket No", "Docket", "Docket Number"]
 NOE_DOCKET = ["TCEQ Docket Number(s) & Creation Dates"]
@@ -109,6 +122,229 @@ def _download(url: str, dest: Path) -> None:
             handle.write(chunk)
     if dest.stat().st_size < 1000:
         raise RuntimeError(f"Download was empty: {url}")
+
+
+def _post_form(url: str, form: dict[str, str]) -> str:
+    payload = urllib.parse.urlencode(form).encode()
+    request = urllib.request.Request(
+        url,
+        data=payload,
+        headers={
+            "User-Agent": "TexMetrics-map-refresh",
+            "Content-Type": "application/x-www-form-urlencoded",
+            "Accept": "text/html",
+        },
+    )
+    with urllib.request.urlopen(request, timeout=300, context=_ssl_context()) as response:
+        html = response.read().decode("utf-8", "replace")
+    if len(html) < 1000:
+        raise RuntimeError("CIO date search returned an empty page")
+    return html
+
+
+def _plain(fragment: str) -> str:
+    text = re.sub(r"<br\s*/?>", "\n", fragment or "", flags=re.IGNORECASE)
+    text = re.sub(r"<[^>]+>", " ", text)
+    text = text.replace("&nbsp;", " ").replace("&amp;", "&").replace("&#39;", "'")
+    return re.sub(r"[ \t]+", " ", text).strip()
+
+
+def _split_respondent(issued: str) -> tuple[str, str]:
+    text = _plain(issued)
+    match = re.search(r"^(.*?),\s*(CN\d+)\s*$", text, re.IGNORECASE)
+    if not match:
+        return text, ""
+    return match.group(1).strip(), match.group(2).upper()
+
+
+def _rn_from_text(text: str) -> str:
+    """RN plus 9 digits, or 9 bare digits written after the county."""
+    match = re.search(r"\bRN\s*(\d{9})\b", text, re.IGNORECASE)
+    if match:
+        return "RN" + match.group(1)
+    match = re.search(r"County;\s*(\d{9})\b", text, re.IGNORECASE)
+    if match:
+        return "RN" + match.group(1)
+    return ""
+
+
+def _county_from_text(text: str) -> str:
+    match = re.search(r"\bin\s+([A-Za-z][A-Za-z .'-]*?)\s+County\b", text, re.IGNORECASE)
+    if not match:
+        return ""
+    return re.sub(r"\s+", " ", match.group(1)).strip().upper()
+
+
+def _parse_cio_html(html: str) -> list[dict]:
+    """One CIO date-search page. Same docket-link split as search_cio_by_rn."""
+    if "must input some search parameters" in (html or "").lower():
+        raise RuntimeError("CIO date search ignored FromDate and ToDate")
+    chunks = (html or "").split("agy_dkt_num_txt=")[1:]
+    hits: list[dict] = []
+    seen: set[str] = set()
+    for chunk in chunks:
+        docket_m = DOCKET_RE.match(chunk)
+        if not docket_m:
+            continue
+        docket = docket_m.group(0).upper()
+        if docket in seen:
+            continue
+        seen.add(docket)
+        date_m = re.search(
+            r"Agenda Date:\s*</span>\s*(\d{2}/\d{2}/\d{4})",
+            chunk,
+            re.IGNORECASE,
+        )
+        pen_m = re.search(
+            r"Penalty Amount:\s*</span>\s*\$?\s*([0-9][0-9,]*)",
+            chunk,
+            re.IGNORECASE,
+        )
+        issued_m = re.search(
+            r"Order Issued To:.*?<div[^>]*>\s*([^<]+)",
+            chunk,
+            re.IGNORECASE | re.DOTALL,
+        )
+        respondent, cn = _split_respondent(issued_m.group(1) if issued_m else "")
+        sum_m = re.search(
+            r"Summary:\s*</span>\s*</div>\s*<div[^>]*>(.{0,8000}?)</div>",
+            chunk,
+            re.IGNORECASE | re.DOTALL,
+        )
+        summary = _plain(sum_m.group(1) if sum_m else "")
+        # A few CIO rows use "?" where the sentence should have a space.
+        english = summary.split("Consideración")[0].replace("?", " ")
+        english = re.sub(r"\s+", " ", english).strip()
+        type_m = re.search(
+            r"\b((?:Agreed|Default|Commission|Emergency)\s+Order)\b",
+            english,
+            re.IGNORECASE,
+        )
+        hits.append(
+            {
+                "docket": docket,
+                "agenda_date": date_m.group(1) if date_m else "",
+                "penalty": float(pen_m.group(1).replace(",", "")) if pen_m else None,
+                "respondent": respondent,
+                "cn": cn,
+                "rn": _rn_from_text(english),
+                "county": _county_from_text(english),
+                "order_type": type_m.group(1).title() if type_m else "",
+                "pdf_url": CIO_PDF_URL.format(docket=docket),
+            }
+        )
+    if not hits:
+        if re.search(r"Agenda Date:|Penalty Amount:", html or "", re.IGNORECASE):
+            raise RuntimeError("CIO shows order labels but no docket links")
+        raise RuntimeError("CIO date search parsed zero orders")
+    air = [hit for hit in hits if hit["docket"].endswith("-AIR-E")]
+    broken = [
+        hit["docket"]
+        for hit in air
+        if not hit["docket"] or not hit["rn"] or not hit["county"]
+    ]
+    if broken:
+        shown = ", ".join(broken[:8])
+        raise RuntimeError(
+            f"CIO AIR-E rows missing docket, RN, or county ({len(broken)}): {shown}"
+        )
+    return air
+
+
+def _fetch_cio(start: date, end: date) -> list[dict]:
+    print(f"CIO date search {start.isoformat()} to {end.isoformat()}")
+    html = _post_form(
+        CIO_DATE_URL,
+        {"FromDate": start.isoformat(), "ToDate": end.isoformat()},
+    )
+    return _parse_cio_html(html)
+
+
+def _county_centers(orders: list[dict]) -> dict[str, tuple[float, float]]:
+    counts: dict[str, Counter] = defaultdict(Counter)
+    for order in orders:
+        county = _clean(order.get("county")).upper()
+        if not county:
+            continue
+        if order.get("loc") == "county" and order.get("lat") is not None and order.get("lon") is not None:
+            counts[county][(float(order["lat"]), float(order["lon"]))] += 1
+        elif order.get("clat") is not None and order.get("clon") is not None:
+            counts[county][(float(order["clat"]), float(order["clon"]))] += 1
+    return {county: counter.most_common(1)[0][0] for county, counter in counts.items() if counter}
+
+
+def _county_point(county: str, centers: dict[str, tuple[float, float]]):
+    if county in centers:
+        return centers[county]
+    folded = county.replace(" ", "")
+    for name, point in centers.items():
+        if name.replace(" ", "") == folded:
+            return point
+    return None
+
+
+def _cio_order(hit: dict, noe_coords, noe_names, centers, sites) -> tuple[dict | None, date | None]:
+    """NOE facility coordinate first, then the county center already on the map."""
+    rn = hit["rn"]
+    lat = lon = None
+    loc = ""
+    points = noe_coords.get(rn)
+    if points:
+        lon, lat = points.most_common(1)[0][0]
+        loc = "site"
+    else:
+        center = _county_point(hit["county"], centers)
+        if center:
+            lat, lon = center
+            loc = "county"
+    if lat is None or lon is None:
+        return None, None
+    shown, parsed = _order_date(hit.get("agenda_date"))
+    penalty = float(hit["penalty"] or 0.0)
+    site = sites.get(rn) or {}
+    name = (
+        site.get("siteName")
+        or site.get("reName")
+        or _most(noe_names.get(rn) or Counter())
+        or hit.get("respondent")
+        or ""
+    )
+    center = _county_point(hit["county"], centers)
+    return (
+        {
+            "caseNo": "",
+            "docket": hit["docket"],
+            "customer": hit.get("respondent") or "",
+            "payable": penalty,
+            "assessed": penalty,
+            "deferred": 0.0,
+            "sep": 0.0,
+            "orderDate": shown,
+            "program": "AIR QUALITY",
+            "county": hit["county"],
+            "rn": rn,
+            "loc": loc,
+            "reClass": site.get("reClass") or "UNCLASSIFIED",
+            "reName": site.get("reName") or name,
+            "siteName": site.get("siteName") or name,
+            "address": site.get("address") or "",
+            "city": site.get("city") or "",
+            "biz": site.get("biz") or "Unknown",
+            "clon": center[1] if center else None,
+            "clat": center[0] if center else None,
+            "lon": lon,
+            "lat": lat,
+            "violTotal": int(site.get("violTotal") or 0),
+            "violActive": int(site.get("violActive") or 0),
+            "violRepeat": int(site.get("violRepeat") or 0),
+            "violMajor": int(site.get("violMajor") or 0),
+            "source": "CIO",
+            "cn": hit.get("cn") or "",
+            "orderType": hit.get("order_type") or "",
+            "pdfUrl": hit.get("pdf_url") or CIO_PDF_URL.format(docket=hit["docket"]),
+        },
+        parsed,
+    )
 
 
 def _site_index(orders: list[dict]) -> dict[str, dict]:
@@ -287,6 +523,50 @@ def build(orders_csv: Path, noes_csv: Path, current: dict) -> dict:
         if parsed:
             parsed_dates.append(parsed)
 
+    if not parsed_dates:
+        raise RuntimeError("No order dates parsed")
+    open_data_orders = len(orders)
+    newest_open = max(parsed_dates)
+    open_dockets = set()
+    for order in orders:
+        open_dockets.update(_dockets(order.get("docket")))
+    cio_rows = _fetch_cio(newest_open - timedelta(days=CIO_LOOKBACK_DAYS), date.today())
+    already = 0
+    cio_added = 0
+    cio_site = 0
+    cio_county = 0
+    centers = _county_centers(orders)
+    for hit in cio_rows:
+        if hit["docket"] in open_dockets:
+            already += 1
+            continue
+        placed, placed_date = _cio_order(hit, noe_coords, noe_names, centers, sites)
+        if placed is None:
+            skipped += 1
+            continue
+        orders.append(placed)
+        open_dockets.add(hit["docket"])
+        cio_added += 1
+        if placed["loc"] == "site":
+            cio_site += 1
+        elif placed["loc"] == "county":
+            cio_county += 1
+        if placed_date:
+            parsed_dates.append(placed_date)
+        program = placed["program"]
+        if program:
+            programs.add(program)
+        if placed["county"]:
+            counties.add(placed["county"])
+        classes.add(placed["reClass"])
+        payables.append(round(placed["payable"] + placed["sep"], 2))
+
+    print(f"Open Data orders: {open_data_orders}")
+    print(f"CIO orders added: {cio_added}")
+    print(f"CIO dockets already in Open Data: {already}")
+    print(f"CIO new site pins: {cio_site}")
+    print(f"CIO new county pins: {cio_county}")
+
     for order in orders:
         prior = None
         for docket in _dockets(order.get("docket")):
@@ -301,6 +581,8 @@ def build(orders_csv: Path, noes_csv: Path, current: dict) -> dict:
             )
             if not same_pin:
                 raise RuntimeError(f"Pin moved for docket {order.get('docket')}")
+            continue
+        if order.get("source") == "CIO":
             continue
         old = sites.get(order["rn"])
         if old is None:
@@ -331,8 +613,8 @@ def build(orders_csv: Path, noes_csv: Path, current: dict) -> dict:
             "skippedPayable": 0,
             "totalPayable": round(sum(payables), 2),
             "maxPayable": max(payables) if payables else 0,
-            "dateMin": oldest.strftime("%b %d, %Y"),
-            "dateMax": newest.strftime("%b %d, %Y"),
+            "dateMin": oldest.isoformat(),
+            "dateMax": newest.isoformat(),
         },
         "programs": sorted(programs),
         "counties": sorted(counties),
