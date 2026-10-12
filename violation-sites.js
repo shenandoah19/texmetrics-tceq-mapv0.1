@@ -985,7 +985,169 @@
     }
   }
 
+  let yearMenu = null;
+
+  function orderYears() {
+    const orders = (state() && state().payload && state().payload.orders) || [];
+    const seen = new Set();
+    for (let i = 0; i < orders.length; i++) {
+      const iso = toIso(orders[i].orderDate);
+      if (/^\d{4}/.test(iso)) seen.add(iso.slice(0, 4));
+    }
+    return Array.from(seen).sort();
+  }
+
+  function closeYearMenu() {
+    if (yearMenu) {
+      yearMenu.remove();
+      yearMenu = null;
+    }
+    document.querySelectorAll("select.year-select.year-open").forEach((el) => {
+      el.classList.remove("year-open");
+      el.setAttribute("aria-expanded", "false");
+    });
+  }
+
+  function openYearMenu(select) {
+    closeYearMenu();
+    const menu = document.createElement("div");
+    menu.className = "year-menu";
+    menu.setAttribute("role", "listbox");
+    const rect = select.getBoundingClientRect();
+    menu.style.left = Math.max(8, rect.left) + "px";
+    menu.style.top = rect.bottom + 4 + "px";
+    menu.style.minWidth = Math.max(rect.width, 112) + "px";
+    const options = select.options;
+    for (let i = 0; i < options.length; i++) {
+      const year = options[i].value || options[i].text;
+      if (!/^\d{4}$/.test(year)) continue;
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "year-option" + (select.value === year ? " on" : "");
+      btn.setAttribute("role", "option");
+      btn.textContent = year;
+      btn.addEventListener("click", () => {
+        select.value = year;
+        closeYearMenu();
+        select.dispatchEvent(new Event("change", { bubbles: true }));
+      });
+      menu.appendChild(btn);
+    }
+    document.body.appendChild(menu);
+    yearMenu = menu;
+    select.classList.add("year-open");
+    select.setAttribute("aria-expanded", "true");
+  }
+
+  function armYearSelect(select) {
+    if (select.dataset.yearArmed === "1") return;
+    select.dataset.yearArmed = "1";
+    select.classList.add("year-select");
+    select.setAttribute("aria-expanded", "false");
+    select.addEventListener("pointerdown", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      if (select.classList.contains("year-open")) closeYearMenu();
+      else openYearMenu(select);
+    });
+  }
+
+  function fillYearSelect(select, years, bound) {
+    const selected = String(toIso(bound) || bound || "").slice(0, 4);
+    const key = years.join(",");
+    if (select.getAttribute("data-years") !== key) {
+      select.innerHTML = years.map((year) => {
+        const on = year === selected ? " selected" : "";
+        return '<option value="' + year + '"' + on + ">" + year + "</option>";
+      }).join("");
+      select.setAttribute("data-years", key);
+    }
+    if (/^\d{4}$/.test(selected)) select.value = selected;
+  }
+
+  function bindYearMenus() {
+    if (window.__texmetricsYearMenuBound) return;
+    window.__texmetricsYearMenuBound = true;
+    document.addEventListener("mousedown", (event) => {
+      if (!yearMenu) return;
+      if (yearMenu.contains(event.target)) return;
+      if (event.target && event.target.closest && event.target.closest("select.year-select")) return;
+      closeYearMenu();
+    });
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") closeYearMenu();
+    });
+  }
+
+  function onDateInputChange() {
+    const current = state();
+    if (!current || !current.filters || typeof current.render !== "function") return;
+    const fromEl = document.getElementById("fromDate");
+    const toEl = document.getElementById("toDate");
+    if (!fromEl || !toEl) return;
+    const fromVal = fromEl.value;
+    const toVal = toEl.value;
+    const restore = window.__texmetricsDateRestore;
+    if (!fromVal && !toVal && restore) {
+      window.__texmetricsDateHold = false;
+      current.filters.dateFrom = restore.dateFrom || "";
+      current.filters.dateTo = restore.dateTo || "";
+      current.render();
+      return;
+    }
+    window.__texmetricsDateHold = true;
+    current.filters.dateFrom = fromVal;
+    current.filters.dateTo = toVal;
+    current.render();
+  }
+
+  function paintDateControls() {
+    closeYearMenu();
+    const host = document.getElementById("dates");
+    const fromSel = document.getElementById("fromYear");
+    const toSel = document.getElementById("toYear");
+    const current = state();
+    if (!host || !fromSel || !toSel || !current || !current.filters) return;
+    const filters = current.filters;
+    const years = orderYears();
+    if (years.length) {
+      fillYearSelect(fromSel, years, filters.dateFrom);
+      fillYearSelect(toSel, years, filters.dateTo);
+    }
+    armYearSelect(fromSel);
+    armYearSelect(toSel);
+    bindYearMenus();
+    if (!window.__texmetricsDateHold) {
+      window.__texmetricsDateRestore = {
+        dateFrom: filters.dateFrom || "",
+        dateTo: filters.dateTo || "",
+      };
+    }
+    let from = host.querySelector("#fromDate");
+    let to = host.querySelector("#toDate");
+    let count = host.querySelector("#dateCount");
+    if (!from || !to || !count) {
+      const wrap = document.createElement("span");
+      wrap.className = "date-filter";
+      wrap.innerHTML =
+        '<label class="date-bound">From date <input id="fromDate" type="date" aria-label="From date"></label>' +
+        '<label class="date-bound">To date <input id="toDate" type="date" aria-label="To date"></label>' +
+        '<span class="date-count" id="dateCount" aria-live="polite"></span>';
+      host.appendChild(wrap);
+      from = wrap.querySelector("#fromDate");
+      to = wrap.querySelector("#toDate");
+      count = wrap.querySelector("#dateCount");
+      from.addEventListener("change", onDateInputChange);
+      to.addEventListener("change", onDateInputChange);
+    }
+    if (document.activeElement !== from) from.value = filters.dateFrom || "";
+    if (document.activeElement !== to) to.value = filters.dateTo || "";
+    const shown = Number(window.__texmetricsVisibleCount);
+    count.textContent = Number.isFinite(shown) ? shown.toLocaleString() + " orders" : "";
+  }
+
   function afterRender() {
+    paintDateControls();
     paintToggle();
     const query = queryEl && queryEl.value.trim();
     if (query) syncSearch(false);

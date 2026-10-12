@@ -180,13 +180,85 @@ select, .chip, .year {
   color: var(--accent-fg);
   border-color: var(--accent);
 }
-.year { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; color: var(--subtle); }
+.year { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--fg); position: relative; }
 .year select {
-  height: auto;
+  height: 32px;
+  min-width: 5.6rem;
   border: 0;
-  background: transparent;
-  padding: 0;
+  border-radius: 8px;
+  background: #f4efe6;
+  color: #1c1916;
+  color-scheme: light;
+  padding: 0 8px;
+  font-weight: 600;
+}
+.year select option {
+  background: #f4efe6;
+  color: #1c1916;
+  padding: 8px 12px;
+  line-height: 1.5;
+  min-height: 32px;
+}
+.year-menu {
+  position: fixed;
+  z-index: 5000;
+  min-width: 7rem;
+  max-height: min(480px, 70vh);
+  overflow-y: auto;
+  background: #f4efe6;
+  color: #1c1916;
+  border: 1px solid #1c1916;
+  border-radius: 10px;
+  padding: 6px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+}
+.year-menu button {
+  display: block;
+  width: 100%;
+  height: 36px;
+  margin: 0;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 6px;
+  background: #f4efe6;
+  color: #1c1916;
+  font-size: 16px;
+  font-weight: 600;
+  text-align: left;
+}
+.year-menu button.on,
+.year-menu button:hover {
+  background: #1c1916;
+  color: #f4efe6;
+}
+.date-filter { display: contents; }
+.date-bound {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 8px 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
   color: var(--fg);
+  font-size: 13px;
+}
+.date-bound input[type="date"] {
+  height: 28px;
+  border: 0;
+  border-radius: 6px;
+  background: #f4efe6;
+  color: #1c1916;
+  color-scheme: light;
+  padding: 0 6px;
+  font-weight: 600;
+}
+.date-count {
+  align-self: center;
+  font-size: 13px;
+  color: var(--muted);
+  white-space: nowrap;
 }
 
 .layout {
@@ -228,6 +300,8 @@ select, .chip, .year {
   .wordmark { height: 32px; }
   .chips { gap: 6px; }
   .chip, .year { height: 32px; padding: 0 10px; font-size: 13px; }
+  .year { height: auto; min-height: 32px; }
+  .date-bound { max-width: 100%; }
   .map-wrap, .embed .map-wrap {
     height: min(52dvh, 420px);
     min-height: 260px;
@@ -238,7 +312,8 @@ select, .chip, .year {
 }
 
 @media (max-width: 420px) {
-  .year { width: 100%; }
+  .year, .date-bound { width: 100%; }
+  .date-bound input[type="date"] { flex: 1; min-width: 0; }
 }
 
 #map {

@@ -468,6 +468,30 @@
   if (src.includes("filterFold") || src.includes("Filters & search")) {
     throw new Error("old filter button was not removed");
   }
+
+  src = src.replace(
+    "    const visible = filterOrders(payload.orders, filters);",
+    "    const visible = filterOrders(payload.orders, filters);\n    window.__texmetricsVisibleCount = visible.length;"
+  );
+  src = src.replace(
+    "filters.dateFrom.slice(0, 4)",
+    "(filters.dateFrom || \"\").slice(0, 4)"
+  );
+  src = src.replace(
+    "        Object.assign(filters, applyPreset(btn.dataset.date, payload.meta.dateMin, payload.meta.dateMax));\n        render();",
+    "        window.__texmetricsDateHold = false;\n        Object.assign(filters, applyPreset(btn.dataset.date, payload.meta.dateMin, payload.meta.dateMax));\n        render();"
+  );
+  src = src.replace(
+    "    document.getElementById(\"fromYear\").addEventListener(\"change\", (e) => {\n      filters.dateFrom = `${e.target.value}-01-01`; render();\n    });",
+    "    document.getElementById(\"fromYear\").addEventListener(\"change\", (e) => {\n      window.__texmetricsDateHold = false;\n      filters.dateFrom = `${e.target.value}-01-01`; render();\n    });"
+  );
+  src = src.replace(
+    "    document.getElementById(\"toYear\").addEventListener(\"change\", (e) => {\n      filters.dateTo = `${e.target.value}-12-31`; render();\n    });",
+    "    document.getElementById(\"toYear\").addEventListener(\"change\", (e) => {\n      window.__texmetricsDateHold = false;\n      filters.dateTo = `${e.target.value}-12-31`; render();\n    });"
+  );
+  if (!src.includes("window.__texmetricsVisibleCount") || !src.includes("window.__texmetricsDateHold") || src.includes("filters.dateFrom.slice(0, 4)")) {
+    throw new Error("date filter patch was not applied");
+  }
   if (missedPatches.length) {
     src += [
       "",
