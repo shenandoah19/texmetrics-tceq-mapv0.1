@@ -100,7 +100,7 @@
     "  if (!rn) return '<p class=\"meta\">No RN in the source file \u2014 report not available.</p>';",
     "  const label = rn === \"RN100209931\" ? \"Get the TexMetrics report for this site\" : \"Get the TexMetrics report for this site \\u00b7 $129\";",
     "  const idAttr = extraClass ? \"\" : \" id=\\\"reportCta\\\"\";",
-    "  return '<button type=\"button\" class=\"report-cta-button ' + (extraClass || \"\") + '\"' + idAttr + ' data-rn=\"' + escapeHtml(rn) + '\">' + label + '</button>' +",
+    "  return '<button type=\"button\" data-goatcounter-click=\"click-buy\" class=\"report-cta-button ' + (extraClass || \"\") + '\"' + idAttr + ' data-rn=\"' + escapeHtml(rn) + '\">' + label + '</button>' +",
     "    '<p class=\"cta-disclaimer\">Public TCEQ compilation. Not a Phase I. Not a TCEQ company rating. Not legal advice.</p>';",
     "}",
   ].join("\n");
