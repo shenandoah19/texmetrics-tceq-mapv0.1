@@ -1,10 +1,10 @@
-"""The map Buy button carries a GoatCounter click name. No network."""
+"""The map preview button carries one GoatCounter click name. No network."""
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 APP = ROOT / "app.js"
 CHECKOUT = "https://texmetrics-pdf-private-production.up.railway.app/checkout"
-CLICK = "data-goatcounter-click=\\\"click-buy\\\""
+CLICK = "data-goatcounter-click=\\\"click-preview\\\""
 
 
 def _report_cta_chunk(text: str) -> str:

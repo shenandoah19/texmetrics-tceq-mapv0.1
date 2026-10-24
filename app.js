@@ -98,9 +98,9 @@
     "function reportCtaHtml(site, extraClass) {",
     "  const rn = (site.rn || \"\").trim().toUpperCase();",
     "  if (!rn) return '<p class=\"meta\">No RN in the source file \u2014 report not available.</p>';",
-    "  const label = rn === \"RN100209931\" ? \"Get the TexMetrics report for this site\" : \"Get the TexMetrics report for this site \\u00b7 $129\";",
+    "  const label = rn === \"RN100209931\" ? \"Get the TexMetrics report for this site\" : \"Preview report \\u00b7 $129\";",
     "  const idAttr = extraClass ? \"\" : \" id=\\\"reportCta\\\"\";",
-    "  return '<button type=\"button\" data-goatcounter-click=\"click-buy\" class=\"report-cta-button ' + (extraClass || \"\") + '\"' + idAttr + ' data-rn=\"' + escapeHtml(rn) + '\">' + label + '</button>' +",
+    "  return '<button type=\"button\" data-goatcounter-click=\"click-preview\" class=\"report-cta-button ' + (extraClass || \"\") + '\"' + idAttr + ' data-rn=\"' + escapeHtml(rn) + '\">' + label + '</button>' +",
     "    '<p class=\"cta-disclaimer\">Public TCEQ compilation. Not a Phase I. Not a TCEQ company rating. Not legal advice.</p>';",
     "}",
   ].join("\n");
@@ -334,6 +334,7 @@
       "    });",
       "  }",
       "  const checkoutNonce = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : \"\";",
+      "  // Unused. The popup opens the report preview. This checkout post stays in the file and is not called.",
       "  function openReportCta(rn) {",
       "    rn = String(rn || \"\").trim().toUpperCase();",
       "    if (!rn) return;",
@@ -363,7 +364,18 @@
       "      });",
       "    });",
       "  }",
-      "  window.__texmetricsOpenReport = openReportCta;",
+      "  const REPORTS_ORIGIN = \"https://texmetrics-pdf-private-production.up.railway.app\";",
+      "  window.__texmetricsReportsOrigin = REPORTS_ORIGIN;",
+      "  function previewReport(rn) {",
+      "    rn = String(rn || \"\").trim().toUpperCase();",
+      "    if (!rn) return;",
+      "    if (rn === \"RN100209931\") {",
+      "      window.open(\"./TexMetrics_RN100209931_Compliance_Report.pdf\", \"_blank\", \"noopener\");",
+      "      return;",
+      "    }",
+      "    window.open(REPORTS_ORIGIN + \"/rn/\" + rn, \"_blank\", \"noopener\");",
+      "  }",
+      "  window.__texmetricsOpenReport = previewReport;",
       "  function onPopupReportClick(ev) {",
       "    const btn = ev.target && ev.target.closest && ev.target.closest(\".leaflet-popup .popup-cta, .leaflet-popup .report-cta-button\");",
       "    if (!btn) return;",
@@ -372,7 +384,7 @@
       "    if (ev.stopImmediatePropagation) ev.stopImmediatePropagation();",
       "    if (window.L && L.DomEvent) L.DomEvent.stop(ev);",
       "    const rn = (btn.getAttribute(\"data-rn\") || (btn.dataset && btn.dataset.rn) || \"\").trim().toUpperCase();",
-      "    openReportCta(rn);",
+      "    previewReport(rn);",
       "  }",
       "  document.addEventListener(\"click\", onPopupReportClick, true);",
       "  map.on(\"popupopen\", (e) => {",
@@ -395,12 +407,12 @@
   );
   src = src.replace(
     "  function showEarlyAccess() {\n    let overlay = document.getElementById(\"earlyAccess\");",
-    "  function showEarlyAccess() {\n    if (typeof openReportCta === \"function\") openReportCta(selectedRn());\n    else { const btn = document.getElementById(\"reportCta\"); if (btn) btn.textContent = \"Report unavailable\"; }\n    return;\n    let overlay = document.getElementById(\"earlyAccess\");"
+    "  function showEarlyAccess() {\n    if (typeof previewReport === \"function\") previewReport(selectedRn());\n    else { const btn = document.getElementById(\"reportCta\"); if (btn) btn.textContent = \"Report unavailable\"; }\n    return;\n    let overlay = document.getElementById(\"earlyAccess\");"
   );
   if (!src.includes("async function generateReport(e) {\n    e.preventDefault();\n    return;")) {
     throw new Error("password submit was not disabled");
   }
-  if (!src.includes("function showEarlyAccess() {\n    if (typeof openReportCta === \"function\") openReportCta(selectedRn());")) {
+  if (!src.includes("function showEarlyAccess() {\n    if (typeof previewReport === \"function\") previewReport(selectedRn());")) {
     throw new Error("password modal was not disabled");
   }
   if (src.includes('addEventListener("click", showEarlyAccess)')) {

@@ -25,7 +25,9 @@
       autoPanPaddingBottomRight: [24, 36],
     };
   };
-  const LIST_CAP = 25;
+  const LIST_CAP = 10;
+  const REPORTS_ORIGIN = "https://texmetrics-pdf-private-production.up.railway.app";
+  const NOT_ON_MAP = "This site is not on the TexMetrics map, so a report is not available.";
   const EMPTY_KICKER = "Independent map of TCEQ public records";
   const SEARCH_KICKER = "Public TCEQ records. Not a TCEQ site.";
   const EMPTY_DETAIL =
@@ -512,13 +514,28 @@
 
   function reportLabel(rn) {
     if (String(rn || "").trim().toUpperCase() === SAMPLE_RN) return "Get the TexMetrics report for this site";
-    return "Get the TexMetrics report for this site · $129";
+    return "Preview report · $129";
+  }
+
+  function openSitePreview(rn) {
+    rn = String(rn || "").trim().toUpperCase();
+    if (!rn) return;
+    if (typeof window.__texmetricsOpenReport === "function") {
+      window.__texmetricsOpenReport(rn);
+      return;
+    }
+    if (rn === SAMPLE_RN) {
+      window.open("./TexMetrics_RN100209931_Compliance_Report.pdf", "_blank", "noopener");
+      return;
+    }
+    const origin = window.__texmetricsReportsOrigin || REPORTS_ORIGIN;
+    window.open(origin + "/rn/" + rn, "_blank", "noopener");
   }
 
   function reportHtml(rn) {
     const label = reportLabel(rn);
     return (
-      '<button type="button" class="report-cta-button" id="reportCta" data-rn="' +
+      '<button type="button" class="report-cta-button" id="reportCta" data-goatcounter-click="click-preview" data-rn="' +
       escapeHtml(rn) +
       '">' +
       label +
@@ -603,7 +620,7 @@
       "<div><dt>Place</dt><dd>" + escapeHtml(place) + "</dd></div>" +
       "<div><dt>Violations</dt><dd>" + escapeHtml(violationsLine(rec)) + "</dd></div>" +
       "</dl>" +
-      '<button type="button" class="report-cta-button popup-cta" data-rn="' + escapeHtml(rec.rn) + '">' + label + "</button>" +
+      '<button type="button" class="report-cta-button popup-cta" data-goatcounter-click="click-preview" data-rn="' + escapeHtml(rec.rn) + '">' + label + "</button>" +
       '<p class="cta-disclaimer">Public TCEQ compilation. Not a Phase I. Not a TCEQ company rating. Not legal advice.</p>' +
       '<ol class="order-list">' + items + more + "</ol></div>"
     );
@@ -827,6 +844,7 @@
       if (!rec) return;
       lockedQuery = (queryEl && queryEl.value.trim().toLowerCase()) || "";
       choose(rec, true);
+      openSitePreview(rec.rn);
     });
     listEl = list;
     return list;
@@ -951,6 +969,26 @@
       "</div>";
   }
 
+  function lookupMiss() {
+    let el = document.getElementById("lookupMiss");
+    if (el) return el;
+    const row = document.querySelector(".search-row");
+    if (!row) return null;
+    el = document.createElement("p");
+    el.id = "lookupMiss";
+    el.className = "meta";
+    el.hidden = true;
+    row.insertAdjacentElement("afterend", el);
+    return el;
+  }
+
+  function showLookupMiss(on) {
+    const el = lookupMiss();
+    if (!el) return;
+    el.hidden = !on;
+    el.textContent = on ? NOT_ON_MAP : "";
+  }
+
   function syncSearch(fly) {
     if (!queryEl) return;
     const query = queryEl.value.trim();
@@ -964,11 +1002,13 @@
       selectedRn = "";
       setSearchChrome(false);
       restorePlaceholder();
+      showLookupMiss(false);
       return;
     }
     if (key !== lockedQuery) lockedRn = "";
-    const hits = search(query);
+    const hits = search(query).slice(0, LIST_CAP);
     lastMatches = hits;
+    showLookupMiss(exactRnQuery(query) && hits.length === 0);
     let picked = null;
     if (hits.length === 1) picked = hits[0];
     else if (lockedRn) picked = hits.find((rec) => rec.rn === lockedRn) || null;
@@ -1200,6 +1240,8 @@
             if (rec) choose(rec, true);
           });
         }
+        queryEl.setAttribute("aria-label", "Look up your site");
+        queryEl.placeholder = "Look up your site";
         queryEl.addEventListener("input", () => syncSearch(true));
         afterRender();
         syncSearch(true);
