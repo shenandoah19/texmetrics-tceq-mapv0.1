@@ -20,7 +20,9 @@
       maxWidth: 340,
       maxHeight: Math.max(160, Math.min(320, height - 88)),
       autoPan: true,
-      keepInView: true,
+      // keepInView runs _adjustPan on moveend. _adjustPan stops the pan
+      // animation, that stop fires moveend, and the two call each other.
+      keepInView: false,
       autoPanPaddingTopLeft: [24, 48],
       autoPanPaddingBottomRight: [24, 36],
     };
