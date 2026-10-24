@@ -307,14 +307,29 @@
 
   src = src.replace("  function showDetail(site) {", selectFns + "  function showDetail(site) {");
 
+  const datesFromLabel = "    ).join(\"\") + `\n      <label class=\"year\">From";
+  if (!src.includes(datesFromLabel)) {
+    throw new Error("date chip markup was not found");
+  }
   src = src.replace(
-    "    ...(urlQuery\n      ? applyPreset(\"all\", payload.meta.dateMin, payload.meta.dateMax)\n      : applyPreset(\"5y\", payload.meta.dateMin, payload.meta.dateMax)),",
-    "    ...applyPreset(\"5y\", payload.meta.dateMin, payload.meta.dateMax),"
+    datesFromLabel,
+    "    ).join(\"\") + `\n      <label class=\"year\"><input type=\"checkbox\" id=\"showAllYears\"${dateId === \"all\" ? \" checked\" : \"\"}> Show all years</label>\n      <label class=\"year\">From"
   );
-
+  const amountChips = "    document.querySelectorAll(\"[data-amt]\").forEach((btn) => {";
+  if (!src.includes(amountChips)) {
+    throw new Error("amount chip binder was not found");
+  }
   src = src.replace(
-    "    Object.assign(filters, applyPreset(\"all\", payload.meta.dateMin, payload.meta.dateMax));",
-    "    Object.assign(filters, applyPreset(\"5y\", payload.meta.dateMin, payload.meta.dateMax));"
+    amountChips,
+    [
+      "    const allYears = document.getElementById(\"showAllYears\");",
+      "    if (allYears) allYears.addEventListener(\"change\", () => {",
+      "      window.__texmetricsDateHold = false;",
+      "      Object.assign(filters, applyPreset(allYears.checked ? \"all\" : \"5y\", payload.meta.dateMin, payload.meta.dateMax));",
+      "      render();",
+      "    });",
+      amountChips,
+    ].join("\n")
   );
 
   src = src.replace(

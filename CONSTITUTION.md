@@ -19,7 +19,7 @@ This file is binding. Grok Build / any agent must read it before editing. A comm
 
 ## Defaults
 
-- Date filter default is last 5 years. `?q=` / deep link stays on 5-year, not All years.
+- Date filter default is last 5 years. Search and `?q=` use all years. A "Show all years" control switches that default 5-year view to all years and back.
 - Selected card and popup order: title, customer, payable (current filter), RN, rating, Get-report CTA, at most 3 orders.
 - Side list is Sites (RN), ranked by payable in the current filter.
 
