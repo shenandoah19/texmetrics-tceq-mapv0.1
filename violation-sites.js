@@ -37,7 +37,6 @@
   const money = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
   const PAID_LABEL = "Open Data paid (payable + SEP)";
   const REPORT_NOTE = "The $129 report can include later Commission Issued Orders not in this file.";
-  const SAMPLE_RN = "RN100209931";
   let citationsThroughIso = "2025-10-21";
 
   let mode = "orders";
@@ -515,7 +514,6 @@
   }
 
   function reportLabel(rn) {
-    if (String(rn || "").trim().toUpperCase() === SAMPLE_RN) return "Get the TexMetrics report for this site";
     return "Preview report · $129";
   }
 
@@ -524,10 +522,6 @@
     if (!rn) return;
     if (typeof window.__texmetricsOpenReport === "function") {
       window.__texmetricsOpenReport(rn);
-      return;
-    }
-    if (rn === SAMPLE_RN) {
-      window.open("./TexMetrics_RN100209931_Compliance_Report.pdf", "_blank", "noopener");
       return;
     }
     const origin = window.__texmetricsReportsOrigin || REPORTS_ORIGIN;
@@ -559,7 +553,6 @@
     const el = document.getElementById("detail");
     if (!el || !rec) return;
     const payable = inWindow(rec);
-    const sample = String(rec.rn || "").trim().toUpperCase() === SAMPLE_RN;
     const outside = payable <= 0 && rec.payableAll > 0;
     const county = countyLabel(rec.county);
     const rnLine = [rec.rn, county].filter(Boolean).join(" · ");
@@ -579,7 +572,7 @@
       "<h2>" + escapeHtml(rec.name) + "</h2>" +
       '<p class="amount">' + escapeHtml(money.format(payable)) + "</p>" +
       '<p class="meta">' + escapeHtml(PAID_LABEL) + "</p>" +
-      (sample ? "" : '<p class="meta">' + escapeHtml(REPORT_NOTE) + "</p>") +
+      '<p class="meta">' + escapeHtml(REPORT_NOTE) + "</p>" +
       ordersThroughHtml() +
       '<p class="meta">' + escapeHtml(listedActive(rec.violActive)) + "</p>" +
       repeat +

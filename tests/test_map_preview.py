@@ -27,10 +27,30 @@ def test_m2_preview_opens_reports_origin_and_checkout_is_unused():
     assert "window.__texmetricsOpenReport = openReportCta" not in APP
 
 
-def test_m3_covestro_still_opens_the_free_sample():
-    assert "RN100209931" in APP
-    assert "TexMetrics_RN100209931_Compliance_Report.pdf" in APP
-    assert "Get the TexMetrics report for this site" in VIOL
+def _preview_report_body():
+    start = APP.index("function previewReport(rn)")
+    end = APP.index("window.__texmetricsOpenReport = previewReport", start)
+    return APP[start:end]
+
+
+def test_m3_covestro_pin_opens_the_live_rn_page():
+    """The live pin handler does not open the old sample PDF."""
+    body = _preview_report_body()
+    assert "Compliance_Report.pdf" not in body
+    assert 'window.open(REPORTS_ORIGIN + \\"/rn/\\" + rn' in body
+    label = VIOL[VIOL.index("function reportLabel"):VIOL.index("function openSitePreview")]
+    assert "Get the TexMetrics report for this site" not in label
+    assert "Preview report · $129" in label
+    fallback = VIOL[VIOL.index("function openSitePreview"):VIOL.index("function reportHtml")]
+    assert "Compliance_Report.pdf" not in fallback
+    assert 'rn === \\"RN100209931\\" ? \\"\\"' not in APP
+
+
+def test_m3_other_pins_still_open_the_live_rn_page():
+    body = _preview_report_body()
+    assert 'window.open(REPORTS_ORIGIN + \\"/rn/\\" + rn' in body
+    for rn in ("RN102579307", "RN106123714"):
+        assert rn not in body
 
 
 def test_m4_one_count_script_and_no_explicit_count():
