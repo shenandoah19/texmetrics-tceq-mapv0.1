@@ -101,11 +101,19 @@ class SearchBox:
         self.now = now
         self.date_from, self.date_to = _preset(preset_id, date_min, date_max, now)
         self.query = ""
+        self.url_query = ""
         self.saved = None
 
     def render(self):
         if self.query.strip():
             if self.saved is None:
+                opened_all = _preset("all", self.date_min, self.date_max, self.now)
+                if (
+                    self.url_query
+                    and self.query.strip() == self.url_query
+                    and (self.date_from, self.date_to) == opened_all
+                ):
+                    self.date_from, self.date_to = _preset("5y", self.date_min, self.date_max, self.now)
                 self.saved = (self.date_from, self.date_to)
             self.date_from, self.date_to = _preset("all", self.date_min, self.date_max, self.now)
         return filter_orders(self.orders, self.query, self.date_from, self.date_to)
@@ -117,12 +125,21 @@ class SearchBox:
             self.saved = None
         return self.render()
 
+    def open_with_query(self, text):
+        """Pinned init: ?q= starts on all years. Clearing must come back to 5 years."""
+        self.url_query = text.strip()
+        self.query = self.url_query
+        self.date_from, self.date_to = _preset("all", self.date_min, self.date_max, self.now)
+        return self.render()
+
     def show_all_years(self, checked):
-        """Checkbox. A click while text is present does not shrink the search."""
-        preset_id = "all" if checked else "5y"
-        self.date_from, self.date_to = _preset(preset_id, self.date_min, self.date_max, self.now)
-        if not self.query.strip():
+        """While a search is active, the box sets the window restored on clear."""
+        picked = _preset("all" if checked else "5y", self.date_min, self.date_max, self.now)
+        if self.query.strip():
+            self.saved = picked
+        else:
             self.saved = None
+            self.date_from, self.date_to = picked
         return self.render()
 
 
@@ -174,3 +191,38 @@ def test_typed_rn_uses_all_years_and_clear_restores_five_years():
     assert len(fresh.type("RN104964267")) == 6
     assert len(fresh.show_all_years(False)) == 6
     assert fresh.type("") == before
+
+
+def test_url_query_clears_back_to_five_years():
+    orders, date_min, date_max = _load()
+    now = datetime.now(timezone.utc)
+    five_from, five_to = _preset("5y", date_min, date_max, now)
+    before = filter_orders(orders, "", five_from, five_to)
+    box = SearchBox(orders, date_min, date_max, now)
+    opened = box.open_with_query("RN104964267")
+    assert len(opened) == 6
+    assert "urlQuery" in APP
+    assert 'applyPreset(\\"5y\\"' in APP
+    cleared = box.type("")
+    assert cleared == before
+    assert box.date_from == five_from
+    assert box.date_to == five_to
+
+
+def test_show_all_years_during_search_sets_the_restore_window():
+    orders, date_min, date_max = _load()
+    now = datetime.now(timezone.utc)
+    five_from, five_to = _preset("5y", date_min, date_max, now)
+    before = filter_orders(orders, "", five_from, five_to)
+    all_from, all_to = _preset("all", date_min, date_max, now)
+    every = filter_orders(orders, "", all_from, all_to)
+
+    widen = SearchBox(orders, date_min, date_max, now)
+    assert len(widen.type("RN104964267")) == 6
+    assert len(widen.show_all_years(True)) == 6
+    assert widen.type("") == every
+
+    shrink = SearchBox(orders, date_min, date_max, now, preset_id="all")
+    assert len(shrink.type("RN109162057")) == 3
+    assert len(shrink.show_all_years(False)) == 3
+    assert shrink.type("") == before

@@ -313,7 +313,7 @@
   }
   src = src.replace(
     datesFromLabel,
-    "    ).join(\"\") + `\n      <label class=\"year\"><input type=\"checkbox\" id=\"showAllYears\"${dateId === \"all\" ? \" checked\" : \"\"}> Show all years</label>\n      <label class=\"year\">From"
+    "    ).join(\"\") + `\n      <label class=\"year\"><input type=\"checkbox\" id=\"showAllYears\"${(String(filters.query || \"\").trim() && window.__texmetricsSearchYears ? (window.__texmetricsSearchYears.dateFrom === (payload.meta.dateMin || \"\") && window.__texmetricsSearchYears.dateTo === (payload.meta.dateMax || \"\") ? \" checked\" : \"\") : (dateId === \"all\" ? \" checked\" : \"\"))}> Show all years</label>\n      <label class=\"year\">From"
   );
   const amountChips = "    document.querySelectorAll(\"[data-amt]\").forEach((btn) => {";
   if (!src.includes(amountChips)) {
@@ -325,7 +325,13 @@
       "    const allYears = document.getElementById(\"showAllYears\");",
       "    if (allYears) allYears.addEventListener(\"change\", () => {",
       "      window.__texmetricsDateHold = false;",
-      "      Object.assign(filters, applyPreset(allYears.checked ? \"all\" : \"5y\", payload.meta.dateMin, payload.meta.dateMax));",
+      "      var picked = applyPreset(allYears.checked ? \"all\" : \"5y\", payload.meta.dateMin, payload.meta.dateMax);",
+      "      if (String(filters.query || \"\").trim()) {",
+      "        window.__texmetricsSearchYears = { dateFrom: picked.dateFrom, dateTo: picked.dateTo };",
+      "      } else {",
+      "        window.__texmetricsSearchYears = null;",
+      "        Object.assign(filters, picked);",
+      "      }",
       "      render();",
       "    });",
       amountChips,
@@ -497,6 +503,14 @@
     [
       "    if (String(filters.query || \"\").trim()) {",
       "      if (!window.__texmetricsSearchYears) {",
+      "        if (urlQuery && String(filters.query || \"\").trim() === String(urlQuery).trim()) {",
+      "          var openedAll = applyPreset(\"all\", payload.meta.dateMin, payload.meta.dateMax);",
+      "          if (filters.dateFrom === openedAll.dateFrom && filters.dateTo === openedAll.dateTo) {",
+      "            var five = applyPreset(\"5y\", payload.meta.dateMin, payload.meta.dateMax);",
+      "            filters.dateFrom = five.dateFrom;",
+      "            filters.dateTo = five.dateTo;",
+      "          }",
+      "        }",
       "        window.__texmetricsSearchYears = { dateFrom: filters.dateFrom, dateTo: filters.dateTo };",
       "      }",
       "      window.__texmetricsDateHold = true;",
