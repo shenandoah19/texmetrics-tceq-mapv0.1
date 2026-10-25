@@ -494,7 +494,32 @@
 
   src = src.replace(
     "    const visible = filterOrders(payload.orders, filters);",
-    "    const visible = filterOrders(payload.orders, filters);\n    window.__texmetricsVisibleCount = visible.length;"
+    [
+      "    if (String(filters.query || \"\").trim()) {",
+      "      if (!window.__texmetricsSearchYears) {",
+      "        window.__texmetricsSearchYears = { dateFrom: filters.dateFrom, dateTo: filters.dateTo };",
+      "      }",
+      "      window.__texmetricsDateHold = true;",
+      "      Object.assign(filters, applyPreset(\"all\", payload.meta.dateMin, payload.meta.dateMax));",
+      "    }",
+      "    const visible = filterOrders(payload.orders, filters);",
+      "    window.__texmetricsVisibleCount = visible.length;",
+    ].join("\n")
+  );
+  src = src.replace(
+    "  document.getElementById(\"query\").addEventListener(\"input\", (e) => { filters.query = e.target.value; render(); });",
+    [
+      "  document.getElementById(\"query\").addEventListener(\"input\", (e) => {",
+      "    filters.query = e.target.value;",
+      "    if (!String(filters.query || \"\").trim() && window.__texmetricsSearchYears) {",
+      "      filters.dateFrom = window.__texmetricsSearchYears.dateFrom;",
+      "      filters.dateTo = window.__texmetricsSearchYears.dateTo;",
+      "      window.__texmetricsSearchYears = null;",
+      "      window.__texmetricsDateHold = false;",
+      "    }",
+      "    render();",
+      "  });",
+    ].join("\n")
   );
   src = src.replace(
     "filters.dateFrom.slice(0, 4)",
@@ -514,6 +539,9 @@
   );
   if (!src.includes("window.__texmetricsVisibleCount") || !src.includes("window.__texmetricsDateHold") || src.includes("filters.dateFrom.slice(0, 4)")) {
     throw new Error("date filter patch was not applied");
+  }
+  if (!src.includes("window.__texmetricsSearchYears = { dateFrom: filters.dateFrom, dateTo: filters.dateTo }") || !src.includes("window.__texmetricsSearchYears = null")) {
+    throw new Error("search year window was not patched");
   }
   if (missedPatches.length) {
     src += [
