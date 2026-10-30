@@ -13,18 +13,20 @@ NOT_ON_MAP = "This site is not on the TexMetrics map, so a report is not availab
 
 
 def test_m1_popup_label_and_click_attr():
-    assert "Preview report \\\\u00b7 $129" in APP
+    assert "Preview report \\u00b7 $129" not in APP
+    assert "$129" not in APP
     assert 'data-goatcounter-click=\\"click-preview\\"' in APP
-    assert "Preview report · $129" in VIOL
+    assert 'return "Preview report";' in VIOL
+    assert "Preview report · $129" not in VIOL
     assert 'data-goatcounter-click="click-preview"' in VIOL
 
 
-def test_m2_preview_opens_reports_origin_and_checkout_is_unused():
-    assert "REPORTS_ORIGIN" in APP
-    assert ORIGIN in APP
+def test_m2_preview_opens_reports_site_and_checkout_is_gone():
+    assert "https://reports.texmetrics.com/rn/" in APP
+    assert ORIGIN not in APP
     assert 'window.__texmetricsOpenReport = previewReport' in APP
-    assert "function openReportCta(rn)" in APP
-    assert "window.__texmetricsOpenReport = openReportCta" not in APP
+    assert "function openReportCta(rn)" not in APP
+    assert "/checkout" not in APP
 
 
 def _preview_report_body():
@@ -33,22 +35,24 @@ def _preview_report_body():
     return APP[start:end]
 
 
-def test_m3_covestro_pin_opens_the_live_rn_page():
-    """The live pin handler does not open the old sample PDF."""
+def test_m3_sample_opens_the_pdf_not_the_preview():
     body = _preview_report_body()
-    assert "Compliance_Report.pdf" not in body
-    assert 'window.open(REPORTS_ORIGIN + \\"/rn/\\" + rn' in body
-    label = VIOL[VIOL.index("function reportLabel"):VIOL.index("function openSitePreview")]
-    assert "Get the TexMetrics report for this site" not in label
-    assert "Preview report · $129" in label
+    assert "TexMetrics_RN100209931_Compliance_Report.pdf" in body
+    assert body.index("Compliance_Report.pdf") < body.index("https://reports.texmetrics.com/rn/")
+    label = VIOL[VIOL.index("function reportLabel"):VIOL.index("function openNewTab")]
+    assert "Get the TexMetrics report for this site" in label
+    assert 'return "Preview report";' in label
     fallback = VIOL[VIOL.index("function openSitePreview"):VIOL.index("function reportHtml")]
-    assert "Compliance_Report.pdf" not in fallback
-    assert 'rn === \\"RN100209931\\" ? \\"\\"' not in APP
+    assert "openNewTab(SAMPLE_PDF)" in fallback
+    assert 'PREVIEW_ORIGIN + "/rn/"' in fallback
+    assert "TexMetrics_RN100209931_Compliance_Report.pdf" in VIOL
+    assert 'const PREVIEW_ORIGIN = "https://reports.texmetrics.com"' in VIOL
 
 
 def test_m3_other_pins_still_open_the_live_rn_page():
     body = _preview_report_body()
-    assert 'window.open(REPORTS_ORIGIN + \\"/rn/\\" + rn' in body
+    assert "https://reports.texmetrics.com/rn/" in body
+    assert "encodeURIComponent(rn)" in body
     for rn in ("RN102579307", "RN106123714"):
         assert rn not in body
 

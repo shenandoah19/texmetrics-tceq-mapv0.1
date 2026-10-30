@@ -6,6 +6,7 @@ import tempfile
 import threading
 import time
 import urllib.request
+from datetime import datetime, timezone
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -56,8 +57,10 @@ CLICK_JS = r"""
     const el = popup && popup.getElement && popup.getElement();
     const text = el ? el.innerText : "";
     const link = el ? el.querySelector("a[href*='/rn/'], button[data-rn]") : null;
+    const btn = el ? el.querySelector("button.report-cta-button, button.popup-cta") : null;
     return {
       text: text.slice(0, 400),
+      button: btn ? btn.textContent : "",
       rn: link ? (link.getAttribute("data-rn") || link.getAttribute("href") || "") : "",
     };
   }
@@ -224,11 +227,35 @@ window.addEventListener('unhandledrejection', function (event) {
         server.shutdown()
 
 
+def _five_year_site_count():
+    """Pins in the default 5-year window. The old 3720 was the 2021-10-24 cutoff."""
+    import sys
+    sys.path.insert(0, str(ROOT / "tests"))
+    from test_search_all_years import _load, _preset
+
+    orders, date_min, date_max = _load()
+    start, end = _preset("5y", date_min, date_max, datetime.now(timezone.utc))
+    sites = set()
+    for order in orders:
+        if start and order["orderDate"] < start:
+            continue
+        if end and order["orderDate"] > end:
+            continue
+        rn = str(order.get("rn") or "").strip().upper()
+        if rn:
+            sites.add(rn)
+            continue
+        sites.add("GEO:%.5f,%.5f" % (float(order.get("lat") or 0), float(order.get("lon") or 0)))
+    return len(sites)
+
+
 def test_pin_click_page_errors_are_empty():
     result = _page_result()
-    assert result.get("markers") == 3720
-    assert "Preview report · $129" in (result.get("edge") or {}).get("text", "")
-    assert "Preview report · $129" in (result.get("middle") or {}).get("text", "")
+    assert result.get("markers") == _five_year_site_count()
+    assert (result.get("edge") or {}).get("button") == "Preview report"
+    assert (result.get("middle") or {}).get("button") == "Preview report"
+    assert "$129" not in (result.get("edge") or {}).get("text", "")
+    assert "$129" not in (result.get("middle") or {}).get("text", "")
     assert str((result.get("edge") or {}).get("rn", "")).startswith("RN")
     assert str((result.get("middle") or {}).get("rn", "")).startswith("RN")
     assert result.get("errors") == []

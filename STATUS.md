@@ -1,0 +1,1 @@
+- 2026-10-29: Map M1, local only, not pushed. The map button says Preview report with no price and opens the preview page in a new tab. The sample RN opens the Covestro PDF. The map does not call checkout.

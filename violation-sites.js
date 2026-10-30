@@ -28,7 +28,9 @@
     };
   };
   const LIST_CAP = 10;
-  const REPORTS_ORIGIN = "https://texmetrics-pdf-private-production.up.railway.app";
+  const PREVIEW_ORIGIN = "https://reports.texmetrics.com";
+  const SAMPLE_RN = "RN100209931";
+  const SAMPLE_PDF = "./TexMetrics_RN100209931_Compliance_Report.pdf";
   const NOT_ON_MAP = "This site is not on the TexMetrics map, so a report is not available.";
   const EMPTY_KICKER = "Independent map of TCEQ public records";
   const SEARCH_KICKER = "Public TCEQ records. Not a TCEQ site.";
@@ -36,7 +38,7 @@
     '<p class="kicker">Selected site</p><p class="meta" style="margin-top:8px">Click a pin to see every agreed order and violation count at that RN.</p>';
   const money = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
   const PAID_LABEL = "Open Data paid (payable + SEP)";
-  const REPORT_NOTE = "The $129 report can include later Commission Issued Orders not in this file.";
+  const REPORT_NOTE = "The full report can include later Commission Issued Orders not in this file.";
   let citationsThroughIso = "2025-10-21";
 
   let mode = "orders";
@@ -514,7 +516,22 @@
   }
 
   function reportLabel(rn) {
-    return "Preview report · $129";
+    rn = String(rn || "").trim().toUpperCase();
+    if (rn === SAMPLE_RN) return "Get the TexMetrics report for this site";
+    return "Preview report";
+  }
+
+  function openNewTab(url) {
+    const opened = window.open(url, "_blank", "noopener");
+    if (opened == null) {
+      const link = document.createElement("a");
+      link.href = url;
+      link.target = "_blank";
+      link.rel = "noopener";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    }
   }
 
   function openSitePreview(rn) {
@@ -524,8 +541,11 @@
       window.__texmetricsOpenReport(rn);
       return;
     }
-    const origin = window.__texmetricsReportsOrigin || REPORTS_ORIGIN;
-    window.open(origin + "/rn/" + rn, "_blank", "noopener");
+    if (rn === SAMPLE_RN) {
+      openNewTab(SAMPLE_PDF);
+      return;
+    }
+    openNewTab(PREVIEW_ORIGIN + "/rn/" + encodeURIComponent(rn));
   }
 
   function reportHtml(rn) {

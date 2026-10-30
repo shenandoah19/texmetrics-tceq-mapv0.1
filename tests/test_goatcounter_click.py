@@ -3,8 +3,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 APP = ROOT / "app.js"
-CHECKOUT = "https://texmetrics-pdf-private-production.up.railway.app/checkout"
 CLICK = "data-goatcounter-click=\\\"click-preview\\\""
+PREVIEW = "https://reports.texmetrics.com/rn/"
+CHECKOUT = "https://texmetrics-pdf-private-production.up.railway.app/checkout"
 
 
 def _report_cta_chunk(text: str) -> str:
@@ -20,4 +21,9 @@ def test_buy_button_is_marked_for_goatcounter():
     assert text.count(CLICK) == 1
     assert "class=\\\"report-cta-button " in chunk
     assert "data-rn=\\\"" in chunk
-    assert CHECKOUT in text
+    assert "Preview report" in chunk
+    assert "$" not in chunk
+    assert PREVIEW in text
+    assert 'window.open(url, \\"_blank\\", \\"noopener\\")' in text
+    assert CHECKOUT not in text
+    assert "/checkout" not in text
